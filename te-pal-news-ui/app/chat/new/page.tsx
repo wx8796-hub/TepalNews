@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, Suspense } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { ArrowLeft, Search, X, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,11 +15,15 @@ import { users, currentUser } from "@/lib/mock-data"
 
 const otherUsers = users.filter((u) => u.id !== currentUser.id)
 
-function NewChatContent() {
+export default function NewChatPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const defaultTab = searchParams.get("type") === "group" ? "group" : "dm"
-  const [tab, setTab] = useState(defaultTab)
+  const [tab, setTab] = useState<"dm" | "group">("dm")
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("type") === "group") setTab("group")
+  }, [])
   const [search, setSearch] = useState("")
   const [selected, setSelected] = useState<string[]>([])
   const [groupName, setGroupName] = useState("")
@@ -127,14 +131,6 @@ function NewChatContent() {
         </Button>
       </div>
     </div>
-  )
-}
-
-export default function NewChatPage() {
-  return (
-    <Suspense fallback={<div className="mx-auto max-w-2xl px-4 py-6 animate-pulse">Loading...</div>}>
-      <NewChatContent />
-    </Suspense>
   )
 }
 
