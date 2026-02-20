@@ -16,6 +16,14 @@ import { supabase } from "@/lib/supabase-browser"
 type ProfileRow = { user_id: string; display_name: string; bio: string | null; avatar_url: string | null }
 
 const DEMO_USER_KEY = "tepal_demo_user"
+const ADMIN_USER_KEY = "tepal_admin_user"
+
+export const ADMIN_USER: User = {
+  id: "admin",
+  name: "Admin",
+  avatar: "A",
+  bio: "Admin access",
+}
 
 type AuthContextValue = {
   user: User | null
@@ -23,6 +31,7 @@ type AuthContextValue = {
   signOut: () => Promise<void>
   isDemo: boolean
   signInDemo?: (user: User) => void
+  signInAsAdmin: () => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -68,6 +77,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) {
       if (typeof window !== "undefined") {
         try {
+          const adminRaw = localStorage.getItem(ADMIN_USER_KEY)
+          if (adminRaw) {
+            setUser(ADMIN_USER)
+            setIsDemo(false)
+            setLoading(false)
+            return
+          }
           const raw = localStorage.getItem(DEMO_USER_KEY)
           if (raw) {
             const parsed = JSON.parse(raw) as User
@@ -101,6 +117,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const u = await fetchProfile(session.user.id)
           if (!cancelled) setUser(u ?? null)
         } else {
+          if (typeof window !== "undefined") {
+            try {
+              if (localStorage.getItem(ADMIN_USER_KEY)) {
+                if (!cancelled) setUser(ADMIN_USER)
+                clearTimeout(timeout)
+                finish()
+                return
+              }
+            } catch {
+              /* ignore */
+            }
+          }
           setUser(null)
         }
       } catch {
@@ -125,20 +153,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [fetchProfile])
 
+  // 로그인 안 된 상태면 로그인 화면으로 (loading과 무관하게)
   useEffect(() => {
-    if (loading) return
     const isAuthPage = pathname === "/auth"
     if (!user && !isAuthPage) {
       router.replace("/auth")
     }
-  }, [loading, user, pathname, router])
+  }, [user, pathname, router])
+  // 로그인/회원가입 성공 시 앱으로 가는 건 auth 페이지에서 router.replace("/") 로 처리
 
   const signOut = useCallback(async () => {
     if (supabase) await supabase.auth.signOut()
-    if (typeof window !== "undefined") localStorage.removeItem(DEMO_USER_KEY)
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(DEMO_USER_KEY)
+      localStorage.removeItem(ADMIN_USER_KEY)
+    }
     setUser(null)
     setIsDemo(false)
     router.replace("/auth")
+  }, [router])
+
+  const signInAsAdmin = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(ADMIN_USER_KEY, "1")
+    }
+    setUser(ADMIN_USER)
+    setIsDemo(false)
+    router.replace("/")
   }, [router])
 
   const signInDemo = useCallback((demoUser: User) => {
@@ -156,13 +197,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       signOut,
       isDemo,
+      signInAsAdmin,
       ...(supabase ? {} : { signInDemo }),
     }),
-    [user, loading, signOut, isDemo, signInDemo]
+    [user, loading, signOut, isDemo, signInAsAdmin, signInDemo]
   )
 
   const isAuthPage = pathname === "/auth"
-  if (loading && !isAuthPage) {
+  // 로그인 페이지가 아닐 때만 로딩 시 전체 화면 로딩 (그 외에는 /auth로 보냄)
+  if (loading && !user && !isAuthPage) {
     return (
       <AuthContext.Provider value={value}>
         <div className="flex min-h-screen items-center justify-center">

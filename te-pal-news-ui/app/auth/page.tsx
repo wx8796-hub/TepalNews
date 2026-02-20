@@ -21,7 +21,7 @@ const DEMO_USER = {
 
 export default function AuthPage() {
   const router = useRouter()
-  const { signInDemo } = useAuth()
+  const { user, signInDemo, signInAsAdmin } = useAuth()
   const [loading, setLoading] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -146,6 +146,17 @@ export default function AuthPage() {
     }
   }
 
+  if (user && supabase) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <div className="rounded-2xl border border-border bg-card p-8 shadow-lg text-center max-w-sm">
+          <p className="text-sm text-muted-foreground mb-4">You&apos;re already signed in as {user.name}.</p>
+          <Button onClick={() => router.replace("/")}>Go to app</Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="flex w-full max-w-4xl overflow-hidden rounded-2xl border border-border bg-card shadow-lg md:min-h-[520px]">
@@ -233,6 +244,14 @@ export default function AuthPage() {
                   disabled={loading}
                 >
                   {loading ? <Loader2 className="size-4 animate-spin" /> : "Log in"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => signInAsAdmin()}
+                >
+                  Admin 권한으로 접속
                 </Button>
               </form>
               {!supabase && signInDemo && (
