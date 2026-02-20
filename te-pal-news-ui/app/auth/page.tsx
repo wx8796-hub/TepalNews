@@ -123,10 +123,10 @@ export default function AuthPage() {
         }
       } else {
         const { error: profileErr } = await supabase.from("profiles").insert({
-          id: data.user.id,
-          name: name.trim(),
+          user_id: data.user.id,
+          display_name: name.trim(),
           bio: bio.trim() || null,
-          avatar: null,
+          avatar_url: null,
         })
         if (profileErr) console.error(profileErr)
       }

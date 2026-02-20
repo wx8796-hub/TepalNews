@@ -32,12 +32,12 @@
 
 1. 왼쪽 메뉴 **SQL Editor** 클릭
 2. **New query** 클릭
-3. 프로젝트 루트의 **`supabase-posts-table.sql`** 파일 내용 전체 복사
+3. **`supabase-schema-v1.sql`** 파일 내용 전체 복사
 4. SQL Editor에 붙여넣기
 5. **Run** (또는 Ctrl+Enter) 실행
 6. "Success. No rows returned" 또는 테이블 생성 메시지 확인
 
-이렇게 하면 **profiles**(회원 프로필), **posts**(포스트) 테이블과 회원가입 시 프로필 자동 생성 트리거가 만들어집니다.
+이렇게 하면 Schema v1이 적용됩니다: **profiles**(user_id, display_name, avatar_url), **posts**(author_id, type enum, post_media, comments, post_likes), **posts_feed** 뷰 등.
 
 ---
 
@@ -92,7 +92,7 @@ npm run dev
 
 - [ ] Supabase 프로젝트 생성
 - [ ] Settings → API에서 URL, anon key, service_role key 복사
-- [ ] SQL Editor에서 `supabase-posts-table.sql` 실행
+- [ ] SQL Editor에서 `supabase-schema-v1.sql` 실행
 - [ ] (선택) Authentication → Email에서 Confirm email 끄기
 - [ ] `te-pal-news-ui/.env.local`에 세 환경 변수 추가
 - [ ] `npm run dev` 다시 실행 후 로그인/회원가입 테스트

@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase-server"
-import { mapRowToPost } from "@/lib/posts-api"
+import { mapRowToPost, appTypeToDb } from "@/lib/posts-api"
 import type { Post } from "@/lib/mock-data"
+import type { PostsFeedRow } from "@/lib/posts-api"
 
 export const dynamic = "force-dynamic"
 
 type Params = { params: Promise<{ id: string }> }
+
+const FEED_SELECT =
+  "id, author_id, type, title, content, link_url, tags, is_hidden, created_at, updated_at, display_name, avatar_url, bio, like_count, comment_count, media"
 
 export async function PATCH(request: Request, { params }: Params) {
   if (!supabaseAdmin) {
@@ -19,33 +23,39 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
   const updates: Record<string, unknown> = {}
-  if (body.type !== undefined) updates.type = body.type
+  if (body.type !== undefined) updates.type = appTypeToDb(body.type)
   if (body.title !== undefined) updates.title = body.title ?? null
   if (body.content !== undefined) updates.content = body.content
-  if (body.media !== undefined) updates.media = body.media ?? null
   if (body.linkUrl !== undefined) updates.link_url = body.linkUrl ?? null
-  if (body.tags !== undefined) updates.tags = body.tags ?? null
-  if (body.likes !== undefined) updates.like_count = body.likes
-  if (body.comments !== undefined) updates.comment_count = body.comments
-  if (body.author !== undefined) updates.author_data = body.author
-  const postColumns = "id, type, author_data, title, content, media, link_url, tags, like_count, comment_count, created_at"
-  if (Object.keys(updates).length === 0) {
-    const { data } = await supabaseAdmin.from("posts").select(postColumns).eq("id", id).single()
-    if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 })
-    return NextResponse.json(mapRowToPost(data as Parameters<typeof mapRowToPost>[0]))
+  if (body.tags !== undefined) updates.tags = body.tags ?? []
+  if (body.media !== undefined) {
+    const mediaPaths = Array.isArray(body.media) ? body.media : []
+    await supabaseAdmin.from("post_media").delete().eq("post_id", id)
+    if (mediaPaths.length > 0) {
+      const mediaRows = mediaPaths.map((storage_path, i) => ({
+        post_id: id,
+        storage_path,
+        sort_order: i,
+      }))
+      await supabaseAdmin.from("post_media").insert(mediaRows)
+    }
   }
-  const { data, error } = await supabaseAdmin
-    .from("posts")
-    .update(updates)
+  if (Object.keys(updates).length > 0) {
+    const { error } = await supabaseAdmin.from("posts").update(updates).eq("id", id)
+    if (error) {
+      console.error("posts PATCH", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+  }
+  const { data: feedRow, error: fetchErr } = await supabaseAdmin
+    .from("posts_feed")
+    .select(FEED_SELECT)
     .eq("id", id)
-    .select(postColumns)
     .single()
-  if (error) {
-    console.error("posts PATCH", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (fetchErr || !feedRow) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
-  if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 })
-  return NextResponse.json(mapRowToPost(data as Parameters<typeof mapRowToPost>[0]))
+  return NextResponse.json(mapRowToPost(feedRow as PostsFeedRow))
 }
 
 export async function DELETE(_request: Request, { params }: Params) {

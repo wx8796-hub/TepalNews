@@ -13,7 +13,7 @@ import { usePathname, useRouter } from "next/navigation"
 import type { User } from "@/lib/mock-data"
 import { supabase } from "@/lib/supabase-browser"
 
-type ProfileRow = { id: string; name: string; bio: string | null; avatar: string | null }
+type ProfileRow = { user_id: string; display_name: string; bio: string | null; avatar_url: string | null }
 
 const DEMO_USER_KEY = "tepal_demo_user"
 
@@ -27,15 +27,13 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-function profileToUser(profile: ProfileRow, email: string): User {
-  const initials =
-    profile.name.trim().length >= 2
-      ? profile.name.trim().slice(0, 2).toUpperCase()
-      : profile.name.trim().toUpperCase() || "?"
+function profileToUser(profile: ProfileRow): User {
+  const name = profile.display_name?.trim() || "?"
+  const initials = name.length >= 2 ? name.slice(0, 2).toUpperCase() : name.toUpperCase()
   return {
-    id: profile.id,
-    name: profile.name,
-    avatar: profile.avatar || initials,
+    id: profile.user_id,
+    name: profile.display_name,
+    avatar: profile.avatar_url || initials,
     bio: profile.bio ?? undefined,
   }
 }
@@ -51,10 +49,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) return null
     const { data } = await supabase
       .from("profiles")
-      .select("id, name, bio, avatar")
-      .eq("id", userId)
+      .select("user_id, display_name, bio, avatar_url")
+      .eq("user_id", userId)
       .single()
-    if (data) return profileToUser(data as ProfileRow, "")
+    if (data) return profileToUser(data as ProfileRow)
     const { data: { user: authUser } } = await supabase.auth.getUser()
     if (!authUser) return null
     const fallback: User = {

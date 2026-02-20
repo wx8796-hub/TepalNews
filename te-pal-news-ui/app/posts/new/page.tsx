@@ -116,7 +116,7 @@ export default function CreatePostPage() {
     await new Promise((r) => setTimeout(r, 500))
 
     const newPost: Post = {
-      id: `p-${Date.now()}`,
+      id: "", // server generates uuid
       type,
       author: user,
       content: content.trim(),
@@ -131,9 +131,9 @@ export default function CreatePostPage() {
     if (images.length > 0) newPost.media = [...images]
 
     try {
-      await addPost(newPost)
+      const saved = await addPost(newPost)
       toast.success("Posted!")
-      router.push(`/posts/${newPost.id}`)
+      router.push(`/posts/${saved.id}`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to save post")
     } finally {

@@ -16,7 +16,7 @@ const TRENDING_SCORE = (p: Post) => p.likes * 2 + p.comments * 3
 
 type PostsContextValue = {
   posts: Post[]
-  addPost: (post: Post) => Promise<void>
+  addPost: (post: Post) => Promise<Post>
   updatePost: (id: string, updates: Partial<Post>) => Promise<void>
   deletePost: (id: string) => Promise<void>
   clearPosts: () => void
@@ -82,22 +82,19 @@ export function PostsProvider({ children }: { children: ReactNode }) {
     saveManualHotTopic(manualHotTopicId)
   }, [manualHotTopicId])
 
-  const addPost = useCallback(async (post: Post) => {
-    try {
-      const res = await fetch("/api/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(post),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || "Failed to save post")
-      }
-      const saved = await res.json()
-      setPosts((prev) => [saved, ...prev])
-    } catch (e) {
-      throw e
+  const addPost = useCallback(async (post: Post): Promise<Post> => {
+    const res = await fetch("/api/posts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(post),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || "Failed to save post")
     }
+    const saved = (await res.json()) as Post
+    setPosts((prev) => [saved, ...prev])
+    return saved
   }, [])
 
   const updatePost = useCallback(async (id: string, updates: Partial<Post>) => {

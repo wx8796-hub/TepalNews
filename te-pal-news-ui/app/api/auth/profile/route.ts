@@ -19,23 +19,25 @@ export async function POST(request: Request) {
   if (userError || !user) {
     return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 })
   }
-  let body: { name?: string; bio?: string | null }
+  let body: { name?: string; displayName?: string; bio?: string | null; avatar_url?: string | null }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
-  const name = typeof body.name === "string" ? body.name.trim() : null
+  const name = typeof body.name === "string" ? body.name.trim() : (typeof body.displayName === "string" ? body.displayName.trim() : null)
   const bio = body.bio !== undefined ? (typeof body.bio === "string" ? body.bio.trim() || null : null) : undefined
+  const avatarUrl = body.avatar_url !== undefined ? (typeof body.avatar_url === "string" ? body.avatar_url.trim() || null : null) : undefined
   const displayName = name || (user.user_metadata?.name as string) || "User"
-  const row: { id: string; name: string; bio: string | null } = {
-    id: user.id,
-    name: displayName,
+  const row: { user_id: string; display_name: string; bio: string | null; avatar_url: string | null } = {
+    user_id: user.id,
+    display_name: displayName,
     bio: bio !== undefined ? bio : null,
+    avatar_url: avatarUrl !== undefined ? avatarUrl : null,
   }
   const { error: upsertError } = await supabaseAdmin
     .from("profiles")
-    .upsert(row, { onConflict: "id" })
+    .upsert(row, { onConflict: "user_id" })
   if (upsertError) {
     console.error("profile upsert", upsertError)
     return NextResponse.json({ error: upsertError.message }, { status: 500 })
