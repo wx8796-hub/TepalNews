@@ -188,10 +188,13 @@ export default function AuthPage() {
           </div>
 
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="w-full mb-6">
+            <TabsList className="w-full mb-2">
               <TabsTrigger value="login" className="flex-1">Log in</TabsTrigger>
               <TabsTrigger value="signup" className="flex-1">Sign up</TabsTrigger>
             </TabsList>
+            <p className="text-xs text-muted-foreground mb-4">
+              {supabase ? "Supabase: connected" : "Supabase: not configured — use Demo login below to try the app."}
+            </p>
 
             <TabsContent value="login" className="space-y-4">
               <form
