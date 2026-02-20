@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Search, X, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -15,7 +15,7 @@ import { users, currentUser } from "@/lib/mock-data"
 
 const otherUsers = users.filter((u) => u.id !== currentUser.id)
 
-export default function NewChatPage() {
+function NewChatContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const defaultTab = searchParams.get("type") === "group" ? "group" : "dm"
@@ -127,6 +127,14 @@ export default function NewChatPage() {
         </Button>
       </div>
     </div>
+  )
+}
+
+export default function NewChatPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-2xl px-4 py-6 animate-pulse">Loading...</div>}>
+      <NewChatContent />
+    </Suspense>
   )
 }
 
