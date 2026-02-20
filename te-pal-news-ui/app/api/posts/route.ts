@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic"
 
 export async function GET() {
   if (!supabaseAdmin) {
-    return NextResponse.json({ error: "Database not configured" }, { status: 503 })
+    return NextResponse.json([])
   }
   const { data, error } = await supabaseAdmin
     .from("posts")

@@ -23,11 +23,11 @@ export default function AuthPage() {
   const handleLogin = async () => {
     setError("")
     if (!email.trim() || !password) {
-      setError("이메일과 비밀번호를 입력해 주세요.")
+      setError("Please enter your email and password.")
       return
     }
     if (!supabase) {
-      setError("로그인 설정이 되어 있지 않습니다.")
+      setError("Sign-in is not available. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (see .env.example).")
       return
     }
     setLoading(true)
@@ -37,19 +37,23 @@ export default function AuthPage() {
         password,
       })
       if (err) {
-        if (err.message.includes("Invalid login")) {
-          setError("이메일 또는 비밀번호가 올바르지 않습니다.")
+        const msg = err.message.toLowerCase()
+        if (msg.includes("invalid login") || msg.includes("invalid credentials")) {
+          setError("Invalid email or password.")
+        } else if (msg.includes("email not confirmed")) {
+          setError("Please confirm your email first. Check your inbox for the confirmation link.")
         } else {
           setError(err.message)
         }
         return
       }
-      if (data.user) {
-        toast.success("로그인되었습니다.")
+      if (data.session) {
+        toast.success("Signed in!")
+        router.refresh()
         router.replace("/")
       }
     } catch {
-      setError("오류가 발생했습니다. 다시 시도해 주세요.")
+      setError("Something went wrong. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -58,19 +62,19 @@ export default function AuthPage() {
   const handleSignup = async () => {
     setError("")
     if (!email.trim() || !password) {
-      setError("이메일과 비밀번호를 입력해 주세요.")
+      setError("Please enter your email and password.")
       return
     }
     if (!name.trim()) {
-      setError("이름을 입력해 주세요.")
+      setError("Please enter your name.")
       return
     }
     if (password.length < 6) {
-      setError("비밀번호는 6자 이상이어야 합니다.")
+      setError("Password must be at least 6 characters.")
       return
     }
     if (!supabase) {
-      setError("회원가입 설정이 되어 있지 않습니다.")
+      setError("Sign-up is not available. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (see .env.example).")
       return
     }
     setLoading(true)
@@ -78,35 +82,56 @@ export default function AuthPage() {
       const { data, error: err } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
-        options: { emailRedirectTo: undefined },
+        options: {
+          data: { name: name.trim(), bio: bio.trim() || null },
+        },
       })
       if (err) {
-        if (err.message.includes("already registered")) {
-          setError("이미 가입된 이메일입니다. 로그인해 주세요.")
+        if (err.message.includes("already registered") || err.message.includes("already been registered")) {
+          setError("This email is already registered. Please sign in.")
         } else {
           setError(err.message)
         }
         return
       }
       if (!data.user) {
-        setError("계정 생성에 실패했습니다.")
+        setError("Account creation failed.")
         return
       }
-      const userId = data.user.id
-      const { error: profileErr } = await supabase.from("profiles").insert({
-        id: userId,
-        name: name.trim(),
-        bio: bio.trim() || null,
-        avatar: null,
-      })
-      if (profileErr) {
-        console.error(profileErr)
-        setError("프로필 저장에 실패했습니다. 로그인 후 프로필에서 수정할 수 있습니다.")
+      const accessToken = data.session?.access_token
+      if (accessToken) {
+        const profileRes = await fetch("/api/auth/profile", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ name: name.trim(), bio: bio.trim() || null }),
+        })
+        if (!profileRes.ok) {
+          const msg = await profileRes.json().catch(() => ({}))
+          console.error("Profile API", msg)
+        }
+      } else {
+        const { error: profileErr } = await supabase.from("profiles").insert({
+          id: data.user.id,
+          name: name.trim(),
+          bio: bio.trim() || null,
+          avatar: null,
+        })
+        if (profileErr) console.error(profileErr)
       }
-      toast.success("회원가입이 완료되었습니다. 로그인해 주세요.")
-      router.replace("/")
-    } catch {
-      setError("오류가 발생했습니다. 다시 시도해 주세요.")
+      if (data.session) {
+        toast.success("Account created!")
+        router.refresh()
+        router.replace("/")
+      } else {
+        toast.success("Account created! Please check your email to confirm, then sign in.")
+        router.replace("/auth")
+      }
+    } catch (e) {
+      console.error(e)
+      setError("Something went wrong. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -125,18 +150,18 @@ export default function AuthPage() {
               <span className="text-xl font-bold text-primary-foreground">TePal News</span>
             </div>
             <p className="mt-6 text-sm text-primary-foreground/80 leading-relaxed">
-              TePal 회원들과 소식, 사진, 영어 팁을 나누는 공간입니다.
+              Your space to share updates, photos, and English tips with TePal members.
             </p>
           </div>
           <div className="space-y-4">
             <div className="rounded-xl bg-primary-foreground/10 p-4">
               <p className="text-sm text-primary-foreground/90 leading-relaxed">
-                &quot;TePal News에서 친구들과 영어 연습을 하니 실력이 늘어요!&quot;
+                &quot;TePal News has been great for practicing English with friends!&quot;
               </p>
-              <p className="mt-2 text-xs text-primary-foreground/60">- TePal 회원</p>
+              <p className="mt-2 text-xs text-primary-foreground/60">— TePal member</p>
             </div>
             <p className="text-xs text-primary-foreground/50">
-              회원 로그인 후 이용할 수 있습니다.
+              Sign in to use TePal News.
             </p>
           </div>
         </div>
@@ -150,18 +175,18 @@ export default function AuthPage() {
               </div>
               <span className="text-lg font-bold text-foreground">TePal News</span>
             </div>
-            <p className="text-xs text-muted-foreground">회원 로그인 후 이용할 수 있습니다.</p>
+            <p className="text-xs text-muted-foreground">Sign in to use TePal News.</p>
           </div>
 
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="w-full mb-6">
-              <TabsTrigger value="login" className="flex-1">로그인</TabsTrigger>
-              <TabsTrigger value="signup" className="flex-1">회원가입</TabsTrigger>
+              <TabsTrigger value="login" className="flex-1">Log in</TabsTrigger>
+              <TabsTrigger value="signup" className="flex-1">Sign up</TabsTrigger>
             </TabsList>
 
             <TabsContent value="login" className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="login-email">이메일 (아이디)</Label>
+                <Label htmlFor="login-email">Email</Label>
                 <Input
                   id="login-email"
                   type="email"
@@ -171,11 +196,11 @@ export default function AuthPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="login-password">비밀번호</Label>
+                <Label htmlFor="login-password">Password</Label>
                 <Input
                   id="login-password"
                   type="password"
-                  placeholder="6자 이상"
+                  placeholder="At least 6 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
@@ -186,13 +211,13 @@ export default function AuthPage() {
                 disabled={loading}
                 onClick={handleLogin}
               >
-                {loading ? <Loader2 className="size-4 animate-spin" /> : "로그인"}
+                {loading ? <Loader2 className="size-4 animate-spin" /> : "Log in"}
               </Button>
             </TabsContent>
 
             <TabsContent value="signup" className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="signup-email">이메일 (아이디) <span className="text-destructive">*</span></Label>
+                <Label htmlFor="signup-email">Email <span className="text-destructive">*</span></Label>
                 <Input
                   id="signup-email"
                   type="email"
@@ -202,30 +227,30 @@ export default function AuthPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="signup-password">비밀번호 <span className="text-destructive">*</span></Label>
+                <Label htmlFor="signup-password">Password <span className="text-destructive">*</span></Label>
                 <Input
                   id="signup-password"
                   type="password"
-                  placeholder="6자 이상"
+                  placeholder="At least 6 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="signup-name">이름 <span className="text-destructive">*</span></Label>
+                <Label htmlFor="signup-name">Name <span className="text-destructive">*</span></Label>
                 <Input
                   id="signup-name"
                   type="text"
-                  placeholder="홍길동"
+                  placeholder="Your name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="signup-bio">Profile 소개 (선택)</Label>
+                <Label htmlFor="signup-bio">Profile (optional)</Label>
                 <Textarea
                   id="signup-bio"
-                  placeholder="자기소개를 입력하세요."
+                  placeholder="A short bio about you"
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   className="min-h-[80px] resize-none"
@@ -237,7 +262,7 @@ export default function AuthPage() {
                 disabled={loading}
                 onClick={handleSignup}
               >
-                {loading ? <Loader2 className="size-4 animate-spin" /> : "회원가입"}
+                {loading ? <Loader2 className="size-4 animate-spin" /> : "Sign up"}
               </Button>
             </TabsContent>
           </Tabs>

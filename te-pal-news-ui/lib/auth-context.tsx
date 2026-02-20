@@ -49,9 +49,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select("id, name, bio, avatar")
       .eq("id", userId)
       .single()
-    if (!data) return null
+    if (data) return profileToUser(data as ProfileRow, "")
     const { data: { user: authUser } } = await supabase.auth.getUser()
-    return profileToUser(data as ProfileRow, authUser?.email ?? "")
+    if (!authUser) return null
+    const fallback: User = {
+      id: authUser.id,
+      name: (authUser.user_metadata?.name as string) || authUser.email?.split("@")[0] || "User",
+      avatar: "?",
+      bio: (authUser.user_metadata?.bio as string) || undefined,
+    }
+    return fallback
   }, [])
 
   useEffect(() => {
