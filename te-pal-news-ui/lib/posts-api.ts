@@ -10,8 +10,8 @@ export type PostRow = {
   media: string[] | null
   link_url: string | null
   tags: string[] | null
-  likes: number
-  comments: number
+  like_count: number
+  comment_count: number
   created_at: string
 }
 
@@ -30,8 +30,8 @@ export function mapRowToPost(row: PostRow & { author?: User }): Post {
     media: row.media ?? undefined,
     linkUrl: row.link_url ?? undefined,
     tags: row.tags ?? undefined,
-    likes: row.likes ?? 0,
-    comments: row.comments ?? 0,
+    likes: row.like_count ?? (row as { likes?: number }).likes ?? 0,
+    comments: row.comment_count ?? (row as { comments?: number }).comments ?? 0,
     liked: false,
     createdAt,
   }
@@ -47,8 +47,8 @@ export function postToRow(post: Post): Omit<PostRow, "created_at"> & { created_a
     media: post.media ?? null,
     link_url: post.linkUrl ?? null,
     tags: post.tags ?? null,
-    likes: post.likes ?? 0,
-    comments: post.comments ?? 0,
+    like_count: post.likes ?? 0,
+    comment_count: post.comments ?? 0,
     created_at: new Date().toISOString(),
   }
 }

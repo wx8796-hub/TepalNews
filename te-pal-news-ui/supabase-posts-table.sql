@@ -33,8 +33,8 @@ create table if not exists public.posts (
   media jsonb,
   link_url text,
   tags jsonb,
-  likes int not null default 0,
-  comments int not null default 0,
+  like_count int not null default 0,
+  comment_count int not null default 0,
   created_at timestamptz not null default now()
 );
 
@@ -57,6 +57,6 @@ alter table public.posts add column if not exists content text;
 alter table public.posts add column if not exists media jsonb;
 alter table public.posts add column if not exists link_url text;
 alter table public.posts add column if not exists tags jsonb;
-alter table public.posts add column if not exists likes int not null default 0;
-alter table public.posts add column if not exists comments int not null default 0;
+alter table public.posts add column if not exists like_count int not null default 0;
+alter table public.posts add column if not exists comment_count int not null default 0;
 alter table public.posts add column if not exists created_at timestamptz not null default now();

@@ -25,11 +25,12 @@ export async function PATCH(request: Request, { params }: Params) {
   if (body.media !== undefined) updates.media = body.media ?? null
   if (body.linkUrl !== undefined) updates.link_url = body.linkUrl ?? null
   if (body.tags !== undefined) updates.tags = body.tags ?? null
-  if (body.likes !== undefined) updates.likes = body.likes
-  if (body.comments !== undefined) updates.comments = body.comments
+  if (body.likes !== undefined) updates.like_count = body.likes
+  if (body.comments !== undefined) updates.comment_count = body.comments
   if (body.author !== undefined) updates.author_data = body.author
+  const postColumns = "id, type, author_data, title, content, media, link_url, tags, like_count, comment_count, created_at"
   if (Object.keys(updates).length === 0) {
-    const { data } = await supabaseAdmin.from("posts").select("*").eq("id", id).single()
+    const { data } = await supabaseAdmin.from("posts").select(postColumns).eq("id", id).single()
     if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 })
     return NextResponse.json(mapRowToPost(data as Parameters<typeof mapRowToPost>[0]))
   }
@@ -37,7 +38,7 @@ export async function PATCH(request: Request, { params }: Params) {
     .from("posts")
     .update(updates)
     .eq("id", id)
-    .select()
+    .select(postColumns)
     .single()
   if (error) {
     console.error("posts PATCH", error)

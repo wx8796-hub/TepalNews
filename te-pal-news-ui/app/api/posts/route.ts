@@ -11,7 +11,7 @@ export async function GET() {
   }
   const { data, error } = await supabaseAdmin
     .from("posts")
-    .select("*")
+    .select("id, type, author_data, title, content, media, link_url, tags, like_count, comment_count, created_at")
     .order("created_at", { ascending: false })
   if (error) {
     console.error("posts GET", error)
@@ -35,7 +35,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
   const row = postToRow(body)
-  const { data, error } = await supabaseAdmin.from("posts").insert(row).select().single()
+  const insertRow = {
+    id: row.id,
+    type: row.type,
+    author_data: row.author_data,
+    title: row.title,
+    content: row.content,
+    media: row.media,
+    link_url: row.link_url,
+    tags: row.tags,
+    like_count: row.like_count,
+    comment_count: row.comment_count,
+    created_at: row.created_at,
+  }
+  const { data, error } = await supabaseAdmin.from("posts").insert(insertRow).select("id, type, author_data, title, content, media, link_url, tags, like_count, comment_count, created_at").single()
   if (error) {
     console.error("posts POST", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
