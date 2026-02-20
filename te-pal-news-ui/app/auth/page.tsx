@@ -193,7 +193,7 @@ export default function AuthPage() {
               <TabsTrigger value="signup" className="flex-1">Sign up</TabsTrigger>
             </TabsList>
             <p className="text-xs text-muted-foreground mb-4">
-              {supabase ? "Supabase: connected" : "Supabase: not configured — use Demo login below to try the app."}
+              {supabase ? "Supabase: connected" : "Supabase: not configured — use Demo login below."}
             </p>
 
             <TabsContent value="login" className="space-y-4">

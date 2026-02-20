@@ -4,7 +4,7 @@ import type { Post, User } from "@/lib/mock-data"
 export type PostRow = {
   id: string
   type: "photo" | "update" | "english-tip"
-  author: User
+  author_data: User
   title: string | null
   content: string
   media: string[] | null
@@ -15,15 +15,16 @@ export type PostRow = {
   created_at: string
 }
 
-export function mapRowToPost(row: PostRow): Post {
+export function mapRowToPost(row: PostRow & { author?: User }): Post {
   const createdAt =
     row.created_at && !Number.isNaN(Date.parse(row.created_at))
       ? formatDistanceToNow(new Date(row.created_at), { addSuffix: true })
       : "Just now"
+  const author = row.author_data ?? (row as { author?: User }).author
   return {
     id: row.id,
     type: row.type,
-    author: row.author as User,
+    author: author as User,
     title: row.title ?? undefined,
     content: row.content,
     media: row.media ?? undefined,
@@ -40,7 +41,7 @@ export function postToRow(post: Post): Omit<PostRow, "created_at"> & { created_a
   return {
     id: post.id,
     type: post.type,
-    author: post.author,
+    author_data: post.author,
     title: post.title ?? null,
     content: post.content,
     media: post.media ?? null,

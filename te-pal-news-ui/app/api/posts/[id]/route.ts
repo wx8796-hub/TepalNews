@@ -27,7 +27,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (body.tags !== undefined) updates.tags = body.tags ?? null
   if (body.likes !== undefined) updates.likes = body.likes
   if (body.comments !== undefined) updates.comments = body.comments
-  if (body.author !== undefined) updates.author = body.author
+  if (body.author !== undefined) updates.author_data = body.author
   if (Object.keys(updates).length === 0) {
     const { data } = await supabaseAdmin.from("posts").select("*").eq("id", id).single()
     if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 })

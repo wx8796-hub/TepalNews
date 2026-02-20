@@ -23,7 +23,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   if (!supabaseAdmin) {
-    return NextResponse.json({ error: "Database not configured" }, { status: 503 })
+    return NextResponse.json(
+      { error: "Database not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to .env.local and restart the dev server (or set in Vercel Environment Variables)." },
+      { status: 503 }
+    )
   }
   let body: Post
   try {

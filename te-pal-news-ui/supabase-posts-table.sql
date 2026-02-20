@@ -27,7 +27,7 @@ create policy "Users can update own profile"
 create table if not exists public.posts (
   id text primary key,
   type text not null check (type in ('photo', 'update', 'english-tip')),
-  author jsonb not null,
+  author_data jsonb not null,
   title text,
   content text not null,
   media jsonb,
@@ -46,3 +46,17 @@ create policy "Allow all for posts"
   for all
   using (true)
   with check (true);
+
+-- Add missing columns if posts table already existed without them (fixes schema cache "author" error)
+alter table public.posts add column if not exists author_data jsonb not null default '{}';
+-- If you had an "author" column before, copy it into author_data then drop author (run if needed):
+-- update public.posts set author_data = author where author is not null and (author_data = '{}' or author_data is null);
+-- alter table public.posts drop column if exists author;
+alter table public.posts add column if not exists title text;
+alter table public.posts add column if not exists content text;
+alter table public.posts add column if not exists media jsonb;
+alter table public.posts add column if not exists link_url text;
+alter table public.posts add column if not exists tags jsonb;
+alter table public.posts add column if not exists likes int not null default 0;
+alter table public.posts add column if not exists comments int not null default 0;
+alter table public.posts add column if not exists created_at timestamptz not null default now();
