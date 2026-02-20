@@ -84,18 +84,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
     setIsDemo(false)
+    let cancelled = false
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        const u = await fetchProfile(session.user.id)
-        setUser(u ?? null)
-      } else {
-        setUser(null)
+      let done = false
+      const finish = () => {
+        if (done || cancelled) return
+        done = true
+        setLoading(false)
       }
-      setLoading(false)
+      const timeout = setTimeout(finish, 3500)
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (cancelled) return
+        clearTimeout(timeout)
+        if (session?.user) {
+          const u = await fetchProfile(session.user.id)
+          if (!cancelled) setUser(u ?? null)
+        } else {
+          setUser(null)
+        }
+      } catch {
+        if (!cancelled) setUser(null)
+      }
+      finish()
     }
     init()
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (session?.user) {
@@ -106,7 +119,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     )
-    return () => subscription.unsubscribe()
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
   }, [fetchProfile])
 
   useEffect(() => {
