@@ -64,83 +64,10 @@ export const users: User[] = [
   { id: "u6", name: "Yuna Kang", avatar: "YK", bio: "Yoga & wellness" },
 ]
 
-export const posts: Post[] = [
-  {
-    id: "p1",
-    type: "photo",
-    author: users[4],
-    title: "Sunset at Han River",
-    content: "Caught this amazing sunset while jogging along the Han River trail. The colors were absolutely stunning tonight!",
-    media: ["/placeholder.svg"],
-    tags: ["photography", "nature"],
-    likes: 42,
-    comments: 8,
-    liked: false,
-    createdAt: "2h ago",
-    isHotTopic: true,
-  },
-  {
-    id: "p2",
-    type: "english-tip",
-    author: users[1],
-    title: "Phrasal Verbs: Get",
-    content: "Today let's learn common phrasal verbs with 'get': get along, get by, get over, get through. Each has a unique meaning that goes beyond the literal translation.",
-    linkUrl: "https://example.com/phrasal-verbs",
-    tags: ["grammar", "phrasal-verbs"],
-    likes: 35,
-    comments: 12,
-    liked: true,
-    createdAt: "5h ago",
-  },
-  {
-    id: "p3",
-    type: "update",
-    author: users[2],
-    content: "Just finished my first week at the new office! Everyone has been so welcoming. Excited for what's ahead.",
-    likes: 28,
-    comments: 5,
-    liked: false,
-    createdAt: "1d ago",
-  },
-  {
-    id: "p4",
-    type: "english-tip",
-    author: users[3],
-    title: "Confusing Words: Affect vs Effect",
-    content: "A simple trick to remember: Affect is usually a Verb (action), Effect is usually a Noun (result). 'The weather affects my mood.' vs 'The effect was immediate.'",
-    tags: ["vocabulary", "grammar"],
-    likes: 52,
-    comments: 15,
-    liked: false,
-    createdAt: "2d ago",
-  },
-  {
-    id: "p5",
-    type: "photo",
-    author: users[5],
-    title: "Morning Yoga Session",
-    content: "Started a morning yoga routine at the park. Fresh air + stretching = perfect way to begin the day. Who wants to join?",
-    media: ["/placeholder.svg"],
-    tags: ["wellness", "lifestyle"],
-    likes: 31,
-    comments: 9,
-    liked: true,
-    createdAt: "3d ago",
-  },
-  {
-    id: "p6",
-    type: "update",
-    author: users[0],
-    content: "Looking for study buddies! I'm preparing for the TOEIC exam next month. Anyone interested in practicing together?",
-    tags: ["study", "toeic"],
-    likes: 18,
-    comments: 7,
-    liked: false,
-    createdAt: "3d ago",
-  },
-]
+/** Not used for feed; posts come from API (Supabase). Kept for type/other refs. */
+export const posts: Post[] = []
 
-export const weeklyBest: Post[] = [posts[3], posts[0], posts[1]]
+export const weeklyBest: Post[] = []
 
 export const comments: Comment[] = [
   {

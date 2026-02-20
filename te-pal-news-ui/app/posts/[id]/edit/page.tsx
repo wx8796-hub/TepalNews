@@ -119,18 +119,22 @@ export default function EditPostPage() {
     }
     setErrors({})
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 400))
-    updatePost(post.id, {
-      type,
-      content: content.trim(),
-      title: title.trim() || undefined,
-      linkUrl: linkUrl.trim() || undefined,
-      tags: tags.length > 0 ? [...tags] : undefined,
-      media: images.length > 0 ? [...images] : undefined,
-    })
-    setLoading(false)
-    toast.success("Post updated!")
-    router.push(`/posts/${post.id}`)
+    try {
+      await updatePost(post.id, {
+        type,
+        content: content.trim(),
+        title: title.trim() || undefined,
+        linkUrl: linkUrl.trim() || undefined,
+        tags: tags.length > 0 ? [...tags] : undefined,
+        media: images.length > 0 ? [...images] : undefined,
+      })
+      toast.success("Post updated!")
+      router.push(`/posts/${post.id}`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update post")
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (!post) {

@@ -75,11 +75,15 @@ export default function PostDetailPage() {
     toast.success("Comment removed.")
   }
 
-  const handleDeletePost = () => {
+  const handleDeletePost = async () => {
     if (!post) return
-    deletePost(post.id)
-    router.push("/")
-    toast.success("Post deleted.")
+    try {
+      await deletePost(post.id)
+      router.push("/")
+      toast.success("Post deleted.")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete post")
+    }
   }
 
   const toggleCommentLike = (commentId: string) => {

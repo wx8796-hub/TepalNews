@@ -128,10 +128,15 @@ export default function CreatePostPage() {
     if (linkUrl.trim()) newPost.linkUrl = linkUrl.trim()
     if (images.length > 0) newPost.media = [...images]
 
-    addPost(newPost)
-    setLoading(false)
-    toast.success("Posted!")
-    router.push(`/posts/${newPost.id}`)
+    try {
+      await addPost(newPost)
+      toast.success("Posted!")
+      router.push(`/posts/${newPost.id}`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save post")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

@@ -24,7 +24,7 @@ const PAGE_SIZE = 20
 const TRENDING_SCORE = (p: Post) => p.likes * 2 + p.comments * 3
 
 export default function HomePage() {
-  const { posts } = usePosts()
+  const { posts, loading, error, refetch } = usePosts()
   const weeklyBest = useWeeklyBest()
   const hotTopic = useHotTopic()
   const [activeTab, setActiveTab] = useState<FilterTab>("All")
@@ -62,10 +62,25 @@ export default function HomePage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6 space-y-6">
-      {hotTopic && <HotTopicHero post={hotTopic} />}
+      {loading && (
+        <div className="py-8 text-center text-muted-foreground text-sm">
+          Loading posts...
+        </div>
+      )}
+      {error && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center text-sm text-destructive">
+          <p>{error}</p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
+      {!loading && !error && hotTopic && <HotTopicHero post={hotTopic} />}
 
-      <WeeklyBestTop3 posts={weeklyBest} />
+      {!loading && !error && <WeeklyBestTop3 posts={weeklyBest} />}
 
+      {!loading && !error && (
+      <>
       <div className="sticky top-14 z-40 -mx-4 bg-background/80 backdrop-blur-md px-4 py-3 space-y-3">
         <div className="flex items-center gap-3">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FilterTab)} className="flex-1">
@@ -122,6 +137,8 @@ export default function HomePage() {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   )
 }

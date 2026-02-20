@@ -1,88 +1,143 @@
 "use client"
 
-import { createContext, useContext, useState, useCallback, useMemo, useEffect, type ReactNode } from "react"
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+  type ReactNode,
+} from "react"
 import type { Post } from "@/lib/mock-data"
-import { posts as initialMockPosts } from "@/lib/mock-data"
 
-const STORAGE_KEY = "tepals-posts"
+const HOT_TOPIC_KEY = "tepals-manual-hot-topic"
 const TRENDING_SCORE = (p: Post) => p.likes * 2 + p.comments * 3
-
-type Stored = { posts: Post[]; manualHotTopicId: string | null }
-
-function loadFromStorage(): Stored | null {
-  if (typeof window === "undefined") return null
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Stored
-    if (Array.isArray(parsed?.posts)) return parsed
-  } catch {
-    /* ignore */
-  }
-  return null
-}
-
-function saveToStorage(posts: Post[], manualHotTopicId: string | null) {
-  if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ posts, manualHotTopicId }))
-  } catch {
-    /* ignore */
-  }
-}
 
 type PostsContextValue = {
   posts: Post[]
-  addPost: (post: Post) => void
-  updatePost: (id: string, updates: Partial<Post>) => void
-  deletePost: (id: string) => void
+  addPost: (post: Post) => Promise<void>
+  updatePost: (id: string, updates: Partial<Post>) => Promise<void>
+  deletePost: (id: string) => Promise<void>
   clearPosts: () => void
   manualHotTopicId: string | null
   setManualHotTopicId: (id: string | null) => void
+  loading: boolean
+  error: string | null
+  refetch: () => Promise<void>
 }
 
 const PostsContext = createContext<PostsContextValue | null>(null)
 
+function loadManualHotTopic(): string | null {
+  if (typeof window === "undefined") return null
+  try {
+    return localStorage.getItem(HOT_TOPIC_KEY)
+  } catch {
+    return null
+  }
+}
+
+function saveManualHotTopic(id: string | null) {
+  if (typeof window === "undefined") return
+  try {
+    if (id) localStorage.setItem(HOT_TOPIC_KEY, id)
+    else localStorage.removeItem(HOT_TOPIC_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
 export function PostsProvider({ children }: { children: ReactNode }) {
   const [posts, setPosts] = useState<Post[]>([])
   const [manualHotTopicId, setManualHotTopicId] = useState<string | null>(null)
-  const [hydrated, setHydrated] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    const stored = loadFromStorage()
-    if (stored) {
-      setPosts(stored.posts)
-      setManualHotTopicId(stored.manualHotTopicId)
-    } else {
-      setPosts([...initialMockPosts])
-      saveToStorage(initialMockPosts, null)
+  const refetch = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/posts")
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `Failed to load posts (${res.status})`)
+      }
+      const data = await res.json()
+      setPosts(Array.isArray(data) ? data : [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load posts")
+      setPosts([])
+    } finally {
+      setLoading(false)
     }
-    setHydrated(true)
   }, [])
 
   useEffect(() => {
-    if (!hydrated) return
-    saveToStorage(posts, manualHotTopicId)
-  }, [hydrated, posts, manualHotTopicId])
+    setManualHotTopicId(loadManualHotTopic())
+    refetch()
+  }, [refetch])
 
-  const addPost = useCallback((post: Post) => {
-    setPosts((prev) => [post, ...prev])
+  useEffect(() => {
+    saveManualHotTopic(manualHotTopicId)
+  }, [manualHotTopicId])
+
+  const addPost = useCallback(async (post: Post) => {
+    try {
+      const res = await fetch("/api/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(post),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Failed to save post")
+      }
+      const saved = await res.json()
+      setPosts((prev) => [saved, ...prev])
+    } catch (e) {
+      throw e
+    }
   }, [])
 
-  const updatePost = useCallback((id: string, updates: Partial<Post>) => {
-    setPosts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
-    )
+  const updatePost = useCallback(async (id: string, updates: Partial<Post>) => {
+    try {
+      const res = await fetch(`/api/posts/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Failed to update post")
+      }
+      const updated = await res.json()
+      setPosts((prev) => prev.map((p) => (p.id === id ? updated : p)))
+    } catch (e) {
+      throw e
+    }
   }, [])
 
-  const deletePost = useCallback((id: string) => {
-    setPosts((prev) => prev.filter((p) => p.id !== id))
-    setManualHotTopicId((mid) => (mid === id ? null : mid))
+  const deletePost = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/posts/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Failed to delete post")
+      }
+      setPosts((prev) => prev.filter((p) => p.id !== id))
+      setManualHotTopicId((mid) => (mid === id ? null : mid))
+    } catch (e) {
+      throw e
+    }
   }, [])
 
   const clearPosts = useCallback(() => {
     setPosts([])
     setManualHotTopicId(null)
+    saveManualHotTopic(null)
   }, [])
 
   const value = useMemo(
@@ -94,8 +149,21 @@ export function PostsProvider({ children }: { children: ReactNode }) {
       clearPosts,
       manualHotTopicId,
       setManualHotTopicId,
+      loading,
+      error,
+      refetch,
     }),
-    [posts, addPost, updatePost, deletePost, clearPosts, manualHotTopicId]
+    [
+      posts,
+      addPost,
+      updatePost,
+      deletePost,
+      clearPosts,
+      manualHotTopicId,
+      loading,
+      error,
+      refetch,
+    ]
   )
 
   return (
