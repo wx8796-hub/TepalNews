@@ -1,9 +1,35 @@
 "use client"
 
-import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from "react"
+import { createContext, useContext, useState, useCallback, useMemo, useEffect, type ReactNode } from "react"
 import type { Post } from "@/lib/mock-data"
+import { posts as initialMockPosts } from "@/lib/mock-data"
 
+const STORAGE_KEY = "tepals-posts"
 const TRENDING_SCORE = (p: Post) => p.likes * 2 + p.comments * 3
+
+type Stored = { posts: Post[]; manualHotTopicId: string | null }
+
+function loadFromStorage(): Stored | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Stored
+    if (Array.isArray(parsed?.posts)) return parsed
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+function saveToStorage(posts: Post[], manualHotTopicId: string | null) {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ posts, manualHotTopicId }))
+  } catch {
+    /* ignore */
+  }
+}
 
 type PostsContextValue = {
   posts: Post[]
@@ -20,6 +46,24 @@ const PostsContext = createContext<PostsContextValue | null>(null)
 export function PostsProvider({ children }: { children: ReactNode }) {
   const [posts, setPosts] = useState<Post[]>([])
   const [manualHotTopicId, setManualHotTopicId] = useState<string | null>(null)
+  const [hydrated, setHydrated] = useState(false)
+
+  useEffect(() => {
+    const stored = loadFromStorage()
+    if (stored) {
+      setPosts(stored.posts)
+      setManualHotTopicId(stored.manualHotTopicId)
+    } else {
+      setPosts([...initialMockPosts])
+      saveToStorage(initialMockPosts, null)
+    }
+    setHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    if (!hydrated) return
+    saveToStorage(posts, manualHotTopicId)
+  }, [hydrated, posts, manualHotTopicId])
 
   const addPost = useCallback((post: Post) => {
     setPosts((prev) => [post, ...prev])
