@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
-import { LogOut, Pencil, Heart, FileText } from "lucide-react"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { LogOut, Pencil, Heart, FileText, ImagePlus } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -18,15 +18,49 @@ import {
 } from "@/components/ui/dialog"
 import { PostCard } from "@/components/post-card"
 import { toast } from "sonner"
-import { currentUser, posts } from "@/lib/mock-data"
+import { usePosts } from "@/lib/posts-context"
+import { currentUser } from "@/lib/mock-data"
 
-const myPosts = posts.filter((p) => p.author.id === currentUser.id)
-const likedPosts = posts.filter((p) => p.liked)
+function getInitials(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) return currentUser.avatar
+  const parts = trimmed.split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  }
+  return trimmed.slice(0, 2).toUpperCase()
+}
 
 export default function ProfilePage() {
+  const { posts } = usePosts()
+  const myPosts = posts.filter((p) => p.author.id === currentUser.id)
+  const likedPosts = posts.filter((p) => p.liked)
   const [displayName, setDisplayName] = useState(currentUser.name)
   const [bio, setBio] = useState(currentUser.bio || "")
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [editOpen, setEditOpen] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const stored = window.localStorage.getItem("tepale_profile_avatar")
+    if (stored) setAvatarUrl(stored)
+  }, [])
+
+  const profileInitials = getInitials(displayName)
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !file.type.startsWith("image/")) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const url = reader.result as string
+      setAvatarUrl(url)
+      if (typeof window !== "undefined") window.localStorage.setItem("tepale_profile_avatar", url)
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ""
+  }
 
   const handleSave = () => {
     toast.success("Profile updated!")
@@ -39,8 +73,9 @@ export default function ProfilePage() {
       <div className="rounded-2xl border border-border bg-card p-6">
         <div className="flex items-start gap-4">
           <Avatar className="size-16">
+            {avatarUrl && <AvatarImage src={avatarUrl} alt="" className="object-cover" />}
             <AvatarFallback className="bg-primary/10 text-primary text-xl font-bold">
-              {currentUser.avatar}
+              {profileInitials}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
@@ -70,6 +105,27 @@ export default function ProfilePage() {
                 <DialogTitle>Edit Profile</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <Label>Avatar (optional)</Label>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAvatarChange}
+                  />
+                  <div className="flex items-center gap-3">
+                    <Avatar className="size-14">
+                      {avatarUrl && <AvatarImage src={avatarUrl} alt="" className="object-cover" />}
+                      <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                        {profileInitials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <Button type="button" variant="outline" size="sm" onClick={() => avatarInputRef.current?.click()}>
+                      <ImagePlus className="size-4" /> Upload photo
+                    </Button>
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-name">Display name</Label>
                   <Input

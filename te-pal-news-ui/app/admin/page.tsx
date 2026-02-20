@@ -14,7 +14,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { posts } from "@/lib/mock-data"
+import { usePosts, useHotTopic } from "@/lib/posts-context"
 import type { Post } from "@/lib/mock-data"
 
 interface Report {
@@ -32,11 +32,15 @@ const mockReports: Report[] = [
 ]
 
 export default function AdminPage() {
-  const [hotTopic, setHotTopic] = useState<Post | null>(
-    posts.find((p) => p.isHotTopic) || null
-  )
+  const { posts, clearPosts, manualHotTopicId, setManualHotTopicId } = usePosts()
   const [searchQuery, setSearchQuery] = useState("")
   const [reports, setReports] = useState(mockReports)
+  const hotTopic = useHotTopic()
+
+  const handleClearAllPosts = () => {
+    clearPosts()
+    toast.success("All posts cleared.")
+  }
 
   const searchResults = searchQuery
     ? posts.filter(
@@ -55,9 +59,14 @@ export default function AdminPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 space-y-8">
-      <div className="flex items-center gap-2">
-        <Shield className="size-6 text-primary" />
-        <h1 className="text-2xl font-bold text-foreground">Admin</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Shield className="size-6 text-primary" />
+          <h1 className="text-2xl font-bold text-foreground">Admin</h1>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleClearAllPosts}>
+          Clear all posts
+        </Button>
       </div>
 
       {/* Hot Topic Panel */}
@@ -100,7 +109,7 @@ export default function AdminPage() {
                       <Button
                         size="sm"
                         onClick={() => {
-                          setHotTopic(null)
+                          setManualHotTopicId(null)
                           toast.success("Hot Topic cleared.")
                         }}
                       >
@@ -148,7 +157,7 @@ export default function AdminPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      setHotTopic(post)
+                      setManualHotTopicId(post.id)
                       setSearchQuery("")
                       toast.success("Hot Topic set!")
                     }}

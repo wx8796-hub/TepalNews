@@ -23,16 +23,23 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { posts, comments as mockComments, currentUser } from "@/lib/mock-data"
+import Link from "next/link"
+import { usePosts } from "@/lib/posts-context"
+import { currentUser } from "@/lib/mock-data"
+import type { Comment } from "@/lib/mock-data"
+import { Trash2 } from "lucide-react"
 
 export default function PostDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const { posts, deletePost } = usePosts()
   const post = posts.find((p) => p.id === params.id)
+  const isOwnPost = post?.author.id === currentUser.id
   const [liked, setLiked] = useState(post?.liked ?? false)
   const [likeCount, setLikeCount] = useState(post?.likes ?? 0)
   const [newComment, setNewComment] = useState("")
-  const [comments, setComments] = useState(mockComments)
+  const [comments, setComments] = useState<Comment[]>([])
+  const [likedCommentIds, setLikedCommentIds] = useState<Set<string>>(new Set())
 
   if (!post) {
     return (
@@ -49,18 +56,47 @@ export default function PostDetailPage() {
 
   const sendComment = () => {
     if (!newComment.trim()) return
-    setComments([
-      ...comments,
+    setComments((prev) => [
+      ...prev,
       {
-        id: `c${Date.now()}`,
+        id: `c-${Date.now()}`,
         author: currentUser,
-        content: newComment,
+        content: newComment.trim(),
         createdAt: "Just now",
         likes: 0,
       },
     ])
     setNewComment("")
     toast.success("Comment added!")
+  }
+
+  const deleteComment = (commentId: string) => {
+    setComments((prev) => prev.filter((c) => c.id !== commentId))
+    toast.success("Comment removed.")
+  }
+
+  const handleDeletePost = () => {
+    if (!post) return
+    deletePost(post.id)
+    router.push("/")
+    toast.success("Post deleted.")
+  }
+
+  const toggleCommentLike = (commentId: string) => {
+    const isCurrentlyLiked = likedCommentIds.has(commentId)
+    setLikedCommentIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(commentId)) next.delete(commentId)
+      else next.add(commentId)
+      return next
+    })
+    setComments((prev) =>
+      prev.map((c) =>
+        c.id === commentId
+          ? { ...c, likes: isCurrentlyLiked ? c.likes - 1 : c.likes + 1 }
+          : c
+      )
+    )
   }
 
   return (
@@ -73,10 +109,18 @@ export default function PostDetailPage() {
       </button>
 
       <article className="rounded-2xl border border-border bg-card overflow-hidden">
-        {/* Media carousel placeholder */}
+        {/* Uploaded images */}
         {post.media && post.media.length > 0 && (
-          <div className="aspect-video bg-muted flex items-center justify-center border-b border-border">
-            <span className="text-sm text-muted-foreground">Photo</span>
+          <div className="border-b border-border space-y-0">
+            {post.media.map((src, i) => (
+              <div key={i} className="w-full aspect-video max-h-[70vh] bg-muted">
+                <img
+                  src={src}
+                  alt={`${post.title || "Post"} image ${i + 1}`}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            ))}
           </div>
         )}
 
@@ -101,19 +145,26 @@ export default function PostDetailPage() {
                 <span className="text-xs text-muted-foreground">{post.createdAt}</span>
               </div>
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm">
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => toast("Edit coming soon")}>Edit</DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive" onClick={() => toast("Delete coming soon")}>
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {isOwnPost && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm">
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild>
+                    <Link href={`/posts/${post.id}/edit`}>Edit</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={handleDeletePost}
+                  >
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
 
           {/* Title + Content */}
@@ -199,12 +250,34 @@ export default function PostDetailPage() {
                           {comment.author.name}
                         </span>
                         <span className="text-xs text-muted-foreground">{comment.createdAt}</span>
+                        {comment.author.id === currentUser.id && (
+                          <button
+                            type="button"
+                            onClick={() => deleteComment(comment.id)}
+                            className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
+                            aria-label="Delete comment"
+                          >
+                            <Trash2 className="size-3" />
+                          </button>
+                        )}
                       </div>
                       <p className="mt-0.5 text-sm text-foreground leading-relaxed">
                         {comment.content}
                       </p>
-                      <button className="mt-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
-                        <Heart className="size-3" /> {comment.likes}
+                      <button
+                        type="button"
+                        onClick={() => toggleCommentLike(comment.id)}
+                        className={cn(
+                          "mt-1 flex items-center gap-1 text-xs transition-colors",
+                          likedCommentIds.has(comment.id)
+                            ? "text-primary font-medium"
+                            : "text-muted-foreground hover:text-primary"
+                        )}
+                      >
+                        <Heart
+                          className={cn("size-3", likedCommentIds.has(comment.id) && "fill-primary")}
+                        />
+                        {comment.likes}
                       </button>
                     </div>
                   </div>

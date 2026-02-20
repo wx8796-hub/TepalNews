@@ -39,6 +39,15 @@ export function PostCard({ post }: { post: Post }) {
             <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
               {post.content}
             </p>
+            {post.media && post.media.length > 0 && (
+              <div className="mt-2 rounded-lg overflow-hidden border border-border bg-muted aspect-video max-h-40 w-full">
+                <img
+                  src={post.media[0]}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
             {post.tags && post.tags.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">
                 {post.tags.map((tag) => (

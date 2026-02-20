@@ -5,7 +5,7 @@ import { ArrowLeft, Trophy, Heart, MessageCircle } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { weeklyBest } from "@/lib/mock-data"
+import { useWeeklyBest } from "@/lib/posts-context"
 
 const rankStyles = [
   { bg: "bg-amber-500", text: "text-white", border: "border-amber-200" },
@@ -14,6 +14,7 @@ const rankStyles = [
 ]
 
 export default function WeeklyBestPage() {
+  const weeklyBest = useWeeklyBest()
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
       <Link

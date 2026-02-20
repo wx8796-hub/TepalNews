@@ -26,11 +26,33 @@ export default function AuthPage() {
       setError("Password must be at least 6 characters.")
       return
     }
+    if (mode === "signup") {
+      try {
+        const key = "tepale_registered_emails"
+        const stored = typeof window !== "undefined" ? window.localStorage.getItem(key) : null
+        const emails: string[] = stored ? JSON.parse(stored) : []
+        const normalized = email.trim().toLowerCase()
+        if (emails.includes(normalized)) {
+          setError("This email is already registered.")
+          return
+        }
+        emails.push(normalized)
+        if (typeof window !== "undefined") window.localStorage.setItem(key, JSON.stringify(emails))
+      } catch {
+        setError("Network error. Please try again.")
+        return
+      }
+    }
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 1200))
-    setLoading(false)
-    toast.success(mode === "login" ? "Welcome back!" : "Account created!")
-    router.push("/")
+    try {
+      await new Promise((r) => setTimeout(r, 1200))
+      toast.success(mode === "login" ? "Welcome back!" : "Account created!")
+      router.push("/")
+    } catch {
+      setError("Network error. Please try again.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

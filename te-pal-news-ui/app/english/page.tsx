@@ -12,12 +12,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { posts } from "@/lib/mock-data"
-
-const tips = posts.filter((p) => p.type === "english-tip")
-const allTags = Array.from(new Set(tips.flatMap((t) => t.tags || [])))
+import { usePosts } from "@/lib/posts-context"
 
 export default function EnglishTipsPage() {
+  const { posts } = usePosts()
+  const tips = posts.filter((p) => p.type === "english-tip")
+  const allTags = Array.from(new Set(tips.flatMap((t) => t.tags || [])))
   const [search, setSearch] = useState("")
   const [sort, setSort] = useState("latest")
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -34,7 +34,9 @@ export default function EnglishTipsPage() {
         const q = search.toLowerCase()
         return (
           tip.content.toLowerCase().includes(q) ||
-          tip.title?.toLowerCase().includes(q)
+          tip.title?.toLowerCase().includes(q) ||
+          tip.author.name.toLowerCase().includes(q) ||
+          (tip.tags ?? []).some((t) => t.toLowerCase().includes(q))
         )
       }
       return true

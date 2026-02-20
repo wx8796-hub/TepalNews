@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Loader2, X, ImagePlus, Link2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { usePosts } from "@/lib/posts-context"
+import { currentUser } from "@/lib/mock-data"
+import type { Post } from "@/lib/mock-data"
 
 const postTypes = [
   { value: "photo", label: "Photo" },
@@ -21,6 +24,7 @@ type PostType = (typeof postTypes)[number]["value"]
 
 export default function CreatePostPage() {
   const router = useRouter()
+  const { addPost } = usePosts()
   const [type, setType] = useState<PostType>("update")
   const [content, setContent] = useState("")
   const [title, setTitle] = useState("")
@@ -43,10 +47,45 @@ export default function CreatePostPage() {
     setTags(tags.filter((t) => t !== tag))
   }
 
-  const addImage = () => {
-    if (images.length < 10) {
-      setImages([...images, `/placeholder.svg`])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const MAX_IMAGE_SIZE_MB = 10
+  const MAX_IMAGE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    const remaining = 10 - images.length
+    if (remaining <= 0) {
+      toast.error("Maximum 10 images allowed.")
+      e.target.value = ""
+      return
     }
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/")).slice(0, remaining)
+    for (const file of imageFiles) {
+      if (file.size > MAX_IMAGE_BYTES) {
+        toast.error(`Image "${file.name}" is over ${MAX_IMAGE_SIZE_MB}MB. Please choose a smaller file.`)
+        e.target.value = ""
+        return
+      }
+    }
+    imageFiles.forEach((file) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = reader.result as string
+        if (result) setImages((prev) => [...prev, result])
+      }
+      reader.readAsDataURL(file)
+    })
+    e.target.value = ""
+  }
+
+  const addImage = () => {
+    if (images.length >= 10) {
+      toast.error("Maximum 10 images allowed.")
+      return
+    }
+    fileInputRef.current?.click()
   }
 
   const removeImage = (index: number) => {
@@ -55,17 +94,44 @@ export default function CreatePostPage() {
 
   const handleSubmit = async () => {
     const newErrors: Record<string, string> = {}
-    if (!content.trim()) newErrors.content = "Content is required."
+    if (!content.trim()) newErrors.content = "Write something first."
+    if (linkUrl.trim()) {
+      try {
+        const u = new URL(linkUrl.trim())
+        if (u.protocol !== "https:" && u.protocol !== "http:") {
+          newErrors.linkUrl = "Link must start with https (or http)."
+        }
+      } catch {
+        newErrors.linkUrl = "Please enter a valid URL."
+      }
+    }
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
       return
     }
     setErrors({})
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 1000))
+    await new Promise((r) => setTimeout(r, 500))
+
+    const newPost: Post = {
+      id: `p-${Date.now()}`,
+      type,
+      author: currentUser,
+      content: content.trim(),
+      likes: 0,
+      comments: 0,
+      liked: false,
+      createdAt: "Just now",
+    }
+    if (title.trim()) newPost.title = title.trim()
+    if (tags.length > 0) newPost.tags = [...tags]
+    if (linkUrl.trim()) newPost.linkUrl = linkUrl.trim()
+    if (images.length > 0) newPost.media = [...images]
+
+    addPost(newPost)
     setLoading(false)
-    toast.success("Post published!")
-    router.push("/")
+    toast.success("Posted!")
+    router.push(`/posts/${newPost.id}`)
   }
 
   return (
@@ -121,16 +187,30 @@ export default function CreatePostPage() {
         {/* Image uploader */}
         <div className="space-y-2">
           <Label>Images (optional, max 10)</Label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={handleImageSelect}
+          />
           <div className="flex flex-wrap gap-2">
-            {images.map((_, i) => (
+            {images.map((url, i) => (
               <div
                 key={i}
-                className="relative size-20 rounded-lg bg-muted border border-border flex items-center justify-center"
+                className="relative size-20 rounded-lg overflow-hidden border border-border bg-muted flex-shrink-0"
               >
-                <span className="text-xs text-muted-foreground">Image {i + 1}</span>
+                <img
+                  src={url}
+                  alt={`Upload ${i + 1}`}
+                  className="size-full object-cover"
+                />
                 <button
+                  type="button"
                   onClick={() => removeImage(i)}
-                  className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground"
+                  className="absolute right-0.5 top-0.5 flex size-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground hover:opacity-90"
+                  aria-label="Remove image"
                 >
                   <X className="size-3" />
                 </button>
@@ -138,13 +218,17 @@ export default function CreatePostPage() {
             ))}
             {images.length < 10 && (
               <button
+                type="button"
                 onClick={addImage}
-                className="flex size-20 items-center justify-center rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                className="flex size-20 flex-shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
               >
                 <ImagePlus className="size-5" />
               </button>
             )}
           </div>
+          <p className="text-xs text-muted-foreground">
+            Click + to upload from your device. Supported: JPG, PNG, GIF, WebP.
+          </p>
         </div>
 
         {/* Title (optional) */}
@@ -176,6 +260,9 @@ export default function CreatePostPage() {
               value={linkUrl}
               onChange={(e) => setLinkUrl(e.target.value)}
             />
+            {errors.linkUrl && (
+              <p className="text-xs text-destructive">{errors.linkUrl}</p>
+            )}
             {type === "english-tip" && (
               <p className="text-xs text-muted-foreground">
                 Add a link to a helpful resource or article.

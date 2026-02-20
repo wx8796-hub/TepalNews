@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from 'sonner'
 import { AppBar } from '@/components/app-bar'
 import { BottomNav } from '@/components/bottom-nav'
+import { PostsProvider } from '@/lib/posts-context'
 import './globals.css'
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
@@ -30,10 +31,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
-        <AppBar />
-        <main className="min-h-screen pb-20 md:pb-0">
-          {children}
-        </main>
+        <PostsProvider>
+          <AppBar />
+          <main className="min-h-screen pb-20 md:pb-0">
+            {children}
+          </main>
+        </PostsProvider>
         <BottomNav />
         <Toaster position="top-center" richColors />
         <Analytics />
