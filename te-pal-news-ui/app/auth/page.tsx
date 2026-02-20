@@ -10,9 +10,18 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase-browser"
+import { useAuth } from "@/lib/auth-context"
+
+const DEMO_USER = {
+  id: "demo-user",
+  name: "Demo User",
+  avatar: "DU",
+  bio: "Try the app without setting up Supabase.",
+}
 
 export default function AuthPage() {
   const router = useRouter()
+  const { signInDemo } = useAuth()
   const [loading, setLoading] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -27,7 +36,7 @@ export default function AuthPage() {
       return
     }
     if (!supabase) {
-      setError("Sign-in is not available. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (see .env.example).")
+      setError("Sign-in is not available. Add Supabase env vars to .env.local, or use Demo login below.")
       return
     }
     setLoading(true)
@@ -74,7 +83,7 @@ export default function AuthPage() {
       return
     }
     if (!supabase) {
-      setError("Sign-up is not available. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (see .env.example).")
+      setError("Sign-up is not available. Add Supabase env vars to .env.local, or use Demo login below.")
       return
     }
     setLoading(true)
@@ -185,34 +194,67 @@ export default function AuthPage() {
             </TabsList>
 
             <TabsContent value="login" className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="login-email">Email</Label>
-                <Input
-                  id="login-email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="login-password">Password</Label>
-                <Input
-                  id="login-password"
-                  type="password"
-                  placeholder="At least 6 characters"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-              {error && <p className="text-xs text-destructive">{error}</p>}
-              <Button
-                className="w-full"
-                disabled={loading}
-                onClick={handleLogin}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  handleLogin()
+                }}
+                className="space-y-4"
               >
-                {loading ? <Loader2 className="size-4 animate-spin" /> : "Log in"}
-              </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="login-email">Email</Label>
+                  <Input
+                    id="login-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="login-password">Password</Label>
+                  <Input
+                    id="login-password"
+                    type="password"
+                    placeholder="At least 6 characters"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                  />
+                </div>
+                {error && <p className="text-xs text-destructive">{error}</p>}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={loading}
+                >
+                  {loading ? <Loader2 className="size-4 animate-spin" /> : "Log in"}
+                </Button>
+              </form>
+              {!supabase && signInDemo && (
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-border" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase text-muted-foreground">
+                    <span className="bg-card px-2">Or</span>
+                  </div>
+                </div>
+              )}
+              {!supabase && signInDemo && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    signInDemo(DEMO_USER)
+                    toast.success("Signed in as demo user.")
+                  }}
+                >
+                  Continue as demo user
+                </Button>
+              )}
             </TabsContent>
 
             <TabsContent value="signup" className="space-y-4">
@@ -258,6 +300,7 @@ export default function AuthPage() {
               </div>
               {error && <p className="text-xs text-destructive">{error}</p>}
               <Button
+                type="button"
                 className="w-full"
                 disabled={loading}
                 onClick={handleSignup}

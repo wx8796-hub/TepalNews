@@ -15,10 +15,14 @@ import { supabase } from "@/lib/supabase-browser"
 
 type ProfileRow = { id: string; name: string; bio: string | null; avatar: string | null }
 
+const DEMO_USER_KEY = "tepal_demo_user"
+
 type AuthContextValue = {
   user: User | null
   loading: boolean
   signOut: () => Promise<void>
+  isDemo: boolean
+  signInDemo?: (user: User) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -41,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isDemo, setIsDemo] = useState(false)
 
   const fetchProfile = useCallback(async (userId: string): Promise<User | null> => {
     if (!supabase) return null
@@ -63,9 +68,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!supabase) {
+      if (typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem(DEMO_USER_KEY)
+          if (raw) {
+            const parsed = JSON.parse(raw) as User
+            if (parsed?.id && parsed?.name) {
+              setUser(parsed)
+              setIsDemo(true)
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
       setLoading(false)
       return
     }
+    setIsDemo(false)
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (session?.user) {
@@ -101,13 +121,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     if (supabase) await supabase.auth.signOut()
+    if (typeof window !== "undefined") localStorage.removeItem(DEMO_USER_KEY)
     setUser(null)
+    setIsDemo(false)
     router.replace("/auth")
   }, [router])
 
+  const signInDemo = useCallback((demoUser: User) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(DEMO_USER_KEY, JSON.stringify(demoUser))
+    }
+    setUser(demoUser)
+    setIsDemo(true)
+    router.replace("/")
+  }, [router])
+
   const value = useMemo(
-    () => ({ user, loading, signOut }),
-    [user, loading, signOut]
+    () => ({
+      user,
+      loading,
+      signOut,
+      isDemo,
+      ...(supabase ? {} : { signInDemo }),
+    }),
+    [user, loading, signOut, isDemo, signInDemo]
   )
 
   const isAuthPage = pathname === "/auth"
