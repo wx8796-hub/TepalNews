@@ -11,11 +11,13 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { users, currentUser } from "@/lib/mock-data"
-
-const otherUsers = users.filter((u) => u.id !== currentUser.id)
+import { users } from "@/lib/mock-data"
+import { useAuth } from "@/lib/auth-context"
 
 export default function NewChatPage() {
+  const { user } = useAuth()
+  const otherUsers = users.filter((u) => u.id !== user?.id)
+
   const router = useRouter()
   const [tab, setTab] = useState<"dm" | "group">("dm")
 

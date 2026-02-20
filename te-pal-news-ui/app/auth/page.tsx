@@ -6,50 +6,107 @@ import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { toast } from "sonner"
+import { supabase } from "@/lib/supabase-browser"
 
 export default function AuthPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [name, setName] = useState("")
+  const [bio, setBio] = useState("")
   const [error, setError] = useState("")
 
-  const handleSubmit = async (mode: "login" | "signup") => {
+  const handleLogin = async () => {
     setError("")
-    if (!email || !password) {
-      setError("Please fill in all fields.")
+    if (!email.trim() || !password) {
+      setError("이메일과 비밀번호를 입력해 주세요.")
       return
     }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.")
+    if (!supabase) {
+      setError("로그인 설정이 되어 있지 않습니다.")
       return
-    }
-    if (mode === "signup") {
-      try {
-        const key = "tepale_registered_emails"
-        const stored = typeof window !== "undefined" ? window.localStorage.getItem(key) : null
-        const emails: string[] = stored ? JSON.parse(stored) : []
-        const normalized = email.trim().toLowerCase()
-        if (emails.includes(normalized)) {
-          setError("This email is already registered.")
-          return
-        }
-        emails.push(normalized)
-        if (typeof window !== "undefined") window.localStorage.setItem(key, JSON.stringify(emails))
-      } catch {
-        setError("Network error. Please try again.")
-        return
-      }
     }
     setLoading(true)
     try {
-      await new Promise((r) => setTimeout(r, 1200))
-      toast.success(mode === "login" ? "Welcome back!" : "Account created!")
-      router.push("/")
+      const { data, error: err } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      })
+      if (err) {
+        if (err.message.includes("Invalid login")) {
+          setError("이메일 또는 비밀번호가 올바르지 않습니다.")
+        } else {
+          setError(err.message)
+        }
+        return
+      }
+      if (data.user) {
+        toast.success("로그인되었습니다.")
+        router.replace("/")
+      }
     } catch {
-      setError("Network error. Please try again.")
+      setError("오류가 발생했습니다. 다시 시도해 주세요.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSignup = async () => {
+    setError("")
+    if (!email.trim() || !password) {
+      setError("이메일과 비밀번호를 입력해 주세요.")
+      return
+    }
+    if (!name.trim()) {
+      setError("이름을 입력해 주세요.")
+      return
+    }
+    if (password.length < 6) {
+      setError("비밀번호는 6자 이상이어야 합니다.")
+      return
+    }
+    if (!supabase) {
+      setError("회원가입 설정이 되어 있지 않습니다.")
+      return
+    }
+    setLoading(true)
+    try {
+      const { data, error: err } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: { emailRedirectTo: undefined },
+      })
+      if (err) {
+        if (err.message.includes("already registered")) {
+          setError("이미 가입된 이메일입니다. 로그인해 주세요.")
+        } else {
+          setError(err.message)
+        }
+        return
+      }
+      if (!data.user) {
+        setError("계정 생성에 실패했습니다.")
+        return
+      }
+      const userId = data.user.id
+      const { error: profileErr } = await supabase.from("profiles").insert({
+        id: userId,
+        name: name.trim(),
+        bio: bio.trim() || null,
+        avatar: null,
+      })
+      if (profileErr) {
+        console.error(profileErr)
+        setError("프로필 저장에 실패했습니다. 로그인 후 프로필에서 수정할 수 있습니다.")
+      }
+      toast.success("회원가입이 완료되었습니다. 로그인해 주세요.")
+      router.replace("/")
+    } catch {
+      setError("오류가 발생했습니다. 다시 시도해 주세요.")
     } finally {
       setLoading(false)
     }
@@ -68,18 +125,18 @@ export default function AuthPage() {
               <span className="text-xl font-bold text-primary-foreground">TePal News</span>
             </div>
             <p className="mt-6 text-sm text-primary-foreground/80 leading-relaxed">
-              Your warm community space for sharing updates, photos, and English learning tips with fellow TePal members.
+              TePal 회원들과 소식, 사진, 영어 팁을 나누는 공간입니다.
             </p>
           </div>
           <div className="space-y-4">
             <div className="rounded-xl bg-primary-foreground/10 p-4">
               <p className="text-sm text-primary-foreground/90 leading-relaxed">
-                {"\"TePal News has been amazing for practicing my English with friends!\""}
+                &quot;TePal News에서 친구들과 영어 연습을 하니 실력이 늘어요!&quot;
               </p>
-              <p className="mt-2 text-xs text-primary-foreground/60">- Sarah, TePal member</p>
+              <p className="mt-2 text-xs text-primary-foreground/60">- TePal 회원</p>
             </div>
             <p className="text-xs text-primary-foreground/50">
-              TePal members - anyone with the link can join.
+              회원 로그인 후 이용할 수 있습니다.
             </p>
           </div>
         </div>
@@ -93,18 +150,18 @@ export default function AuthPage() {
               </div>
               <span className="text-lg font-bold text-foreground">TePal News</span>
             </div>
-            <p className="text-xs text-muted-foreground">TePal members - anyone with the link can join.</p>
+            <p className="text-xs text-muted-foreground">회원 로그인 후 이용할 수 있습니다.</p>
           </div>
 
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="w-full mb-6">
-              <TabsTrigger value="login" className="flex-1">Log in</TabsTrigger>
-              <TabsTrigger value="signup" className="flex-1">Sign up</TabsTrigger>
+              <TabsTrigger value="login" className="flex-1">로그인</TabsTrigger>
+              <TabsTrigger value="signup" className="flex-1">회원가입</TabsTrigger>
             </TabsList>
 
             <TabsContent value="login" className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="login-email">Email</Label>
+                <Label htmlFor="login-email">이메일 (아이디)</Label>
                 <Input
                   id="login-email"
                   type="email"
@@ -114,11 +171,11 @@ export default function AuthPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="login-password">Password</Label>
+                <Label htmlFor="login-password">비밀번호</Label>
                 <Input
                   id="login-password"
                   type="password"
-                  placeholder="At least 6 characters"
+                  placeholder="6자 이상"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
@@ -127,18 +184,15 @@ export default function AuthPage() {
               <Button
                 className="w-full"
                 disabled={loading}
-                onClick={() => handleSubmit("login")}
+                onClick={handleLogin}
               >
-                {loading ? <Loader2 className="size-4 animate-spin" /> : "Log in"}
+                {loading ? <Loader2 className="size-4 animate-spin" /> : "로그인"}
               </Button>
-              <p className="text-center text-xs text-muted-foreground">
-                Email verification is not required.
-              </p>
             </TabsContent>
 
             <TabsContent value="signup" className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="signup-email">Email</Label>
+                <Label htmlFor="signup-email">이메일 (아이디) <span className="text-destructive">*</span></Label>
                 <Input
                   id="signup-email"
                   type="email"
@@ -148,26 +202,43 @@ export default function AuthPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="signup-password">Password</Label>
+                <Label htmlFor="signup-password">비밀번호 <span className="text-destructive">*</span></Label>
                 <Input
                   id="signup-password"
                   type="password"
-                  placeholder="At least 6 characters"
+                  placeholder="6자 이상"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-name">이름 <span className="text-destructive">*</span></Label>
+                <Input
+                  id="signup-name"
+                  type="text"
+                  placeholder="홍길동"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-bio">Profile 소개 (선택)</Label>
+                <Textarea
+                  id="signup-bio"
+                  placeholder="자기소개를 입력하세요."
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  className="min-h-[80px] resize-none"
                 />
               </div>
               {error && <p className="text-xs text-destructive">{error}</p>}
               <Button
                 className="w-full"
                 disabled={loading}
-                onClick={() => handleSubmit("signup")}
+                onClick={handleSignup}
               >
-                {loading ? <Loader2 className="size-4 animate-spin" /> : "Create account"}
+                {loading ? <Loader2 className="size-4 animate-spin" /> : "회원가입"}
               </Button>
-              <p className="text-center text-xs text-muted-foreground">
-                Email verification is not required.
-              </p>
             </TabsContent>
           </Tabs>
         </div>

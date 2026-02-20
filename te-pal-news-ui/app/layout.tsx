@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from 'sonner'
 import { AppBar } from '@/components/app-bar'
 import { BottomNav } from '@/components/bottom-nav'
+import { AuthProvider } from '@/lib/auth-context'
 import { PostsProvider } from '@/lib/posts-context'
 import './globals.css'
 
@@ -31,12 +32,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
+        <AuthProvider>
         <PostsProvider>
           <AppBar />
           <main className="min-h-screen pb-20 md:pb-0">
             {children}
           </main>
         </PostsProvider>
+        </AuthProvider>
         <BottomNav />
         <Toaster position="top-center" richColors />
         <Analytics />

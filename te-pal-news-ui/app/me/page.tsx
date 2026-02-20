@@ -19,11 +19,11 @@ import {
 import { PostCard } from "@/components/post-card"
 import { toast } from "sonner"
 import { usePosts } from "@/lib/posts-context"
-import { currentUser } from "@/lib/mock-data"
+import { useAuth } from "@/lib/auth-context"
 
-function getInitials(name: string): string {
+function getInitials(name: string, fallback = "?"): string {
   const trimmed = name.trim()
-  if (!trimmed) return currentUser.avatar
+  if (!trimmed) return fallback
   const parts = trimmed.split(/\s+/).filter(Boolean)
   if (parts.length >= 2) {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
@@ -32,11 +32,13 @@ function getInitials(name: string): string {
 }
 
 export default function ProfilePage() {
+  const { user, signOut } = useAuth()
   const { posts } = usePosts()
-  const myPosts = posts.filter((p) => p.author.id === currentUser.id)
+  if (!user) return null
+  const myPosts = posts.filter((p) => p.author.id === user.id)
   const likedPosts = posts.filter((p) => p.liked)
-  const [displayName, setDisplayName] = useState(currentUser.name)
-  const [bio, setBio] = useState(currentUser.bio || "")
+  const [displayName, setDisplayName] = useState(user.name)
+  const [bio, setBio] = useState(user.bio || "")
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [editOpen, setEditOpen] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
@@ -47,7 +49,7 @@ export default function ProfilePage() {
     if (stored) setAvatarUrl(stored)
   }, [])
 
-  const profileInitials = getInitials(displayName)
+  const profileInitials = getInitials(displayName, user.avatar)
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -150,10 +152,8 @@ export default function ProfilePage() {
               </div>
             </DialogContent>
           </Dialog>
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/auth">
-              <LogOut className="size-4" /> Log out
-            </Link>
+          <Button variant="outline" size="sm" onClick={() => signOut()}>
+            <LogOut className="size-4" /> Log out
           </Button>
         </div>
       </div>

@@ -25,16 +25,17 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { usePosts } from "@/lib/posts-context"
-import { currentUser } from "@/lib/mock-data"
+import { useAuth } from "@/lib/auth-context"
 import type { Comment } from "@/lib/mock-data"
 import { Trash2 } from "lucide-react"
 
 export default function PostDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const { user } = useAuth()
   const { posts, deletePost } = usePosts()
   const post = posts.find((p) => p.id === params.id)
-  const isOwnPost = post?.author.id === currentUser.id
+  const isOwnPost = user && post?.author.id === user.id
   const [liked, setLiked] = useState(post?.liked ?? false)
   const [likeCount, setLikeCount] = useState(post?.likes ?? 0)
   const [newComment, setNewComment] = useState("")
@@ -60,7 +61,7 @@ export default function PostDetailPage() {
       ...prev,
       {
         id: `c-${Date.now()}`,
-        author: currentUser,
+        author: user!,
         content: newComment.trim(),
         createdAt: "Just now",
         likes: 0,
@@ -254,7 +255,7 @@ export default function PostDetailPage() {
                           {comment.author.name}
                         </span>
                         <span className="text-xs text-muted-foreground">{comment.createdAt}</span>
-                        {comment.author.id === currentUser.id && (
+                        {user && comment.author.id === user.id && (
                           <button
                             type="button"
                             onClick={() => deleteComment(comment.id)}
@@ -295,7 +296,7 @@ export default function PostDetailPage() {
             <div className="flex items-center gap-2">
               <Avatar className="size-8">
                 <AvatarFallback className="text-[10px] bg-primary/10 text-primary font-semibold">
-                  {currentUser.avatar}
+                  {user?.avatar}
                 </AvatarFallback>
               </Avatar>
               <Input

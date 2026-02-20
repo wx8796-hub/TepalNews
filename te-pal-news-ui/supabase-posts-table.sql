@@ -1,5 +1,26 @@
--- Run this in Supabase SQL Editor (Dashboard → SQL Editor) to create the posts table.
+-- Run this in Supabase SQL Editor (Dashboard → SQL Editor).
 
+-- 1) Profiles (name, profile info) — linked to Supabase Auth
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  name text not null,
+  bio text,
+  avatar text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.profiles enable row level security;
+
+create policy "Users can read all profiles"
+  on public.profiles for select using (true);
+
+create policy "Users can insert own profile"
+  on public.profiles for insert with check (auth.uid() = id);
+
+create policy "Users can update own profile"
+  on public.profiles for update using (auth.uid() = id);
+
+-- 2) Posts table
 create table if not exists public.posts (
   id text primary key,
   type text not null check (type in ('photo', 'update', 'english-tip')),

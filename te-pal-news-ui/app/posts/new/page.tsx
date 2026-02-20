@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { usePosts } from "@/lib/posts-context"
-import { currentUser } from "@/lib/mock-data"
+import { useAuth } from "@/lib/auth-context"
 import type { Post } from "@/lib/mock-data"
 
 const postTypes = [
@@ -24,7 +24,9 @@ type PostType = (typeof postTypes)[number]["value"]
 
 export default function CreatePostPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const { addPost } = usePosts()
+  if (!user) return null
   const [type, setType] = useState<PostType>("update")
   const [content, setContent] = useState("")
   const [title, setTitle] = useState("")
@@ -116,7 +118,7 @@ export default function CreatePostPage() {
     const newPost: Post = {
       id: `p-${Date.now()}`,
       type,
-      author: currentUser,
+      author: user,
       content: content.trim(),
       likes: 0,
       comments: 0,

@@ -14,12 +14,14 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
-import { conversations, chatMessages, currentUser } from "@/lib/mock-data"
+import { conversations, chatMessages } from "@/lib/mock-data"
 import type { ChatMessage } from "@/lib/mock-data"
+import { useAuth } from "@/lib/auth-context"
 
 export default function ChatRoomPage() {
   const params = useParams()
   const router = useRouter()
+  const { user } = useAuth()
   const conversation = conversations.find((c) => c.id === params.id)
   const [messages, setMessages] = useState<ChatMessage[]>(chatMessages)
   const [input, setInput] = useState("")
@@ -38,10 +40,10 @@ export default function ChatRoomPage() {
   }
 
   const sendMessage = () => {
-    if (!input.trim()) return
+    if (!input.trim() || !user) return
     const newMsg: ChatMessage = {
       id: `m${Date.now()}`,
-      sender: currentUser,
+      sender: user,
       content: input,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       isOwn: true,

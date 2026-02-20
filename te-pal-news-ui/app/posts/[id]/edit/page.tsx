@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { usePosts } from "@/lib/posts-context"
-import { currentUser } from "@/lib/mock-data"
+import { useAuth } from "@/lib/auth-context"
 import type { Post } from "@/lib/mock-data"
 
 const postTypes = [
@@ -29,9 +29,10 @@ const MAX_IMAGE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
 export default function EditPostPage() {
   const params = useParams()
   const router = useRouter()
+  const { user } = useAuth()
   const { posts, updatePost } = usePosts()
   const post = posts.find((p) => p.id === params.id)
-  const isOwn = post?.author.id === currentUser.id
+  const isOwn = user && post?.author.id === user.id
 
   const [type, setType] = useState<PostType>("update")
   const [content, setContent] = useState("")
