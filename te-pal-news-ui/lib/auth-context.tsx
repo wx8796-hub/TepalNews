@@ -324,8 +324,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const isAuthPage = pathname === "/auth"
-  // supabase 준비 전이거나, 로그인 페이지가 아닐 때 로딩이면 전체 화면 로딩
-  if (!supabaseReady || (loading && !user && !isAuthPage)) {
+  const isHome = pathname === "/"
+  // supabase 준비 전이거나, (로그인 페이지가 아닐 때 로딩이면) 전체 화면 로딩. 홈(/)은 로딩 중에도 렌더해 포스트 fetch를 바로 시작.
+  if (!supabaseReady || (loading && !user && !isAuthPage && !isHome)) {
     return (
       <AuthContext.Provider value={value}>
         <div className="flex min-h-screen items-center justify-center">

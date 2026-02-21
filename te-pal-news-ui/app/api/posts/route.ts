@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase-server"
-import { getRequestUserId } from "@/lib/api-auth"
+import { getRequestUser } from "@/lib/api-auth"
 import { mapRowToPost, postToInsertRow } from "@/lib/posts-api"
 import type { Post } from "@/lib/mock-data"
 import type { PostsFeedRow } from "@/lib/posts-api"
@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic"
 
 const FEED_SELECT =
   "id, author_id, type, title, content, link_url, tags, is_hidden, created_at, updated_at, display_name, avatar_url, bio, like_count, comment_count, media"
+const FEED_LIMIT = 25
 
 export async function GET(request: Request) {
   if (!supabaseAdmin) {
@@ -17,12 +18,18 @@ export async function GET(request: Request) {
       { status: 503 }
     )
   }
-  const { data, error } = await supabaseAdmin
-    .from("posts_feed")
-    .select(FEED_SELECT)
-    .eq("is_hidden", false)
-    .order("created_at", { ascending: false })
-    .limit(50)
+
+  const [feedResult, authResult] = await Promise.all([
+    supabaseAdmin
+      .from("posts_feed")
+      .select(FEED_SELECT)
+      .eq("is_hidden", false)
+      .order("created_at", { ascending: false })
+      .limit(FEED_LIMIT),
+    getRequestUser(request).catch(() => ({ error: "none", status: 0 } as const)),
+  ])
+
+  const { data, error } = feedResult
   if (error) {
     console.error("posts GET", error)
     const msg = error.message || ""
@@ -40,13 +47,12 @@ export async function GET(request: Request) {
   const rows = (data ?? []) as PostsFeedRow[]
   const posts: Post[] = rows.map((row) => mapRowToPost(row))
 
-  const auth = await getRequestUserId(request)
-  if (!("error" in auth) && auth.userId && posts.length > 0) {
+  if ("userId" in authResult && authResult.userId && posts.length > 0) {
     const postIds = posts.map((p) => p.id)
     const { data: likeRows } = await supabaseAdmin
       .from("post_likes")
       .select("post_id")
-      .eq("user_id", auth.userId)
+      .eq("user_id", authResult.userId)
       .in("post_id", postIds)
     const likedSet = new Set((likeRows ?? []).map((r) => r.post_id))
     posts.forEach((p) => {
