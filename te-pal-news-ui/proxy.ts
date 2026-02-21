@@ -11,7 +11,7 @@ function isPublicPath(pathname: string): boolean {
   return false
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   const hasSupabase = typeof url === "string" && url.length > 0 && typeof anonKey === "string" && anonKey.length > 0
