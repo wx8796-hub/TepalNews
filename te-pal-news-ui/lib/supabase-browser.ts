@@ -17,6 +17,11 @@ function createSupabaseClient(urlStr: string, anonKeyStr: string): SupabaseClien
   return createClient(urlStr, anonKeyStr, { auth: { lock: noOpLock } })
 }
 
+// 배포 환경에서 빌드 시 env가 번들에 있으면 브라우저에서 즉시 클라이언트 생성 (effect 순서 의존 제거)
+if (typeof window !== "undefined" && hasEnv) {
+  _client = createSupabaseClient(url as string, anonKey as string)
+}
+
 function getSupabaseSync(): SupabaseClient | null {
   if (!hasEnv) {
     if (typeof window !== "undefined") {
@@ -64,7 +69,8 @@ export async function ensureSupabaseFromApi(): Promise<SupabaseClient | null> {
       : null
 
   const tryFetch = async (): Promise<SupabaseClient | null> => {
-    const res = await fetch("/api/config/supabase", { cache: "no-store" })
+    const base = typeof window !== "undefined" ? window.location.origin : ""
+    const res = await fetch(`${base}/api/config/supabase`, { cache: "no-store" })
     let data: { configured?: boolean; url?: string; anonKey?: string } | null = null
     try {
       data = await res.json()

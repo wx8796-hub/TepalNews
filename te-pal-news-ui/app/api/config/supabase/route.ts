@@ -19,9 +19,14 @@ export async function GET() {
     typeof anonKey === "string" &&
     anonKey.length > 0
   if (!ok) {
+    const missing = [
+      typeof url !== "string" || !url.length ? "NEXT_PUBLIC_SUPABASE_URL" : null,
+      typeof anonKey !== "string" || !anonKey.length ? "NEXT_PUBLIC_SUPABASE_ANON_KEY" : null,
+    ].filter(Boolean)
     return NextResponse.json(
       {
         configured: false,
+        missing,
         hint: "Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel → Settings → Environment Variables for this environment (Production/Preview), then redeploy.",
       },
       { status: 503, headers: NO_STORE }
