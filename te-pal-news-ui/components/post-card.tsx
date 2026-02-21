@@ -97,6 +97,7 @@ export function PostCard({ post }: { post: Post }) {
                   alt=""
                   loading="lazy"
                   decoding="async"
+                  fetchPriority="low"
                   className="max-h-full max-w-full object-contain object-center"
                 />
               </div>

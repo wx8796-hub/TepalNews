@@ -21,7 +21,7 @@ import type { Post } from "@/lib/mock-data"
 
 const filterTabs = ["All", "Photos", "Updates", "English Tips"] as const
 type FilterTab = (typeof filterTabs)[number]
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 const TRENDING_SCORE = (p: Post) => p.likes * 2 + p.comments * 3
 
 export default function HomePage() {

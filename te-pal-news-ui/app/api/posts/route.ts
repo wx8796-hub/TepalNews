@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic"
 
 const FEED_SELECT =
   "id, author_id, type, title, content, link_url, tags, is_hidden, created_at, updated_at, display_name, avatar_url, bio, like_count, comment_count, media"
-const FEED_LIMIT = 25
+const FEED_LIMIT = 12
 
 export async function GET(request: Request) {
   if (!supabaseAdmin) {
