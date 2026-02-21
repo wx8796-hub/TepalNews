@@ -11,7 +11,7 @@ import {
 } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import type { User } from "@/lib/mock-data"
-import { supabase } from "@/lib/supabase-browser"
+import { getSupabase, ensureSupabaseFromApi } from "@/lib/supabase-browser"
 import { clearAuthCookie, setAuthCookie } from "@/lib/auth-cookie"
 
 type ProfileRow = { user_id: string; display_name: string; bio: string | null; avatar_url: string | null }
@@ -61,6 +61,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [sessionResolved, setSessionResolved] = useState(false)
   const [isDemo, setIsDemo] = useState(false)
+  const [supabaseReady, setSupabaseReady] = useState(false)
+
+  useEffect(() => {
+    if (getSupabase()) {
+      setSupabaseReady(true)
+      return
+    }
+    ensureSupabaseFromApi().then(() => setSupabaseReady(true))
+  }, [])
 
   const ensureProfile = useCallback(async (accessToken: string, metadata?: { name?: string; bio?: string } | null) => {
     try {
@@ -85,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const fetchProfile = useCallback(async (userId: string): Promise<User | null> => {
+    const supabase = getSupabase()
     if (!supabase) return null
     const { data } = await supabase
       .from("profiles")
@@ -104,6 +114,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    if (!supabaseReady) return
+    const supabase = getSupabase()
     if (!supabase) {
       if (DEV_BYPASS_AUTH && typeof window !== "undefined") {
         try {
@@ -190,12 +202,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true
       subscription.unsubscribe()
     }
-  }, [fetchProfile, ensureProfile])
+  }, [fetchProfile, ensureProfile, supabaseReady])
 
   // 로그인 안 된 상태면 로그인 화면으로. session 판별 완료 후에만 redirect.
   // 홈(/)에서는 절대 redirect 하지 않음 → Chat/다른 링크 클릭이 가드에 막히지 않음. /chat·/me 등은 각 페이지에서 /auth?next=... 처리.
   useEffect(() => {
-    if (loading || !sessionResolved) return
+    if (!supabaseReady || loading || !sessionResolved) return
     const currentPath =
       typeof window !== "undefined" ? window.location.pathname : pathname
     if (currentPath === "/") return // 홈에서는 redirect 안 함 (첫 클릭으로 Chat 들어가게)
@@ -209,10 +221,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[AUTH_GUARD]", { pathname, currentPath, hasUser: !!user, target })
       router.replace(target)
     }
-  }, [user, pathname, router, loading, sessionResolved])
+  }, [user, pathname, router, loading, sessionResolved, supabaseReady])
   // 로그인/회원가입 성공 시 앱으로 가는 건 auth 페이지에서 router.replace(safeNext || "/") 로 처리
 
   const signOut = useCallback(async () => {
+    const supabase = getSupabase()
     if (supabase) await supabase.auth.signOut()
     if (typeof window !== "undefined") {
       localStorage.removeItem(DEMO_USER_KEY)
@@ -235,12 +248,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router])
 
   const getAccessToken = useCallback(async (): Promise<string | null> => {
+    const supabase = getSupabase()
     if (!supabase) return null
     const { data: { session } } = await supabase.auth.getSession()
     return session?.access_token ?? null
   }, [])
 
   const refreshProfile = useCallback(async () => {
+    const supabase = getSupabase()
     if (!supabase || isDemo) return
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) return
@@ -267,14 +282,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInAsAdmin,
       getAccessToken,
       refreshProfile,
-      ...(supabase ? {} : DEV_BYPASS_AUTH ? { signInDemo } : {}),
+      ...(getSupabase() ? {} : DEV_BYPASS_AUTH ? { signInDemo } : {}),
     }),
     [user, loading, signOut, isDemo, signInAsAdmin, getAccessToken, refreshProfile, signInDemo]
   )
 
   const isAuthPage = pathname === "/auth"
-  // 로그인 페이지가 아닐 때만 로딩 시 전체 화면 로딩 (그 외에는 /auth로 보냄)
-  if (loading && !user && !isAuthPage) {
+  // supabase 준비 전이거나, 로그인 페이지가 아닐 때 로딩이면 전체 화면 로딩
+  if (!supabaseReady || (loading && !user && !isAuthPage)) {
     return (
       <AuthContext.Provider value={value}>
         <div className="flex min-h-screen items-center justify-center">

@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-import { supabase } from "@/lib/supabase-browser"
+import { getSupabase } from "@/lib/supabase-browser"
 import { useAuth } from "@/lib/auth-context"
 import { getGlobalConversationId, getOrCreateGlobalConversation, GLOBAL_CHAT_TITLE } from "@/lib/chat-global"
 
@@ -56,6 +56,8 @@ export default function GlobalChatPage() {
 
   const ensureProfile = useCallback(async (userId: string): Promise<ProfileRow | null> => {
     if (profilesCache[userId]) return profilesCache[userId]
+    const supabase = getSupabase()
+    if (!supabase) return null
     const { data } = await supabase
       .from("profiles")
       .select("user_id, display_name, avatar_url")
@@ -73,6 +75,8 @@ export default function GlobalChatPage() {
 
   const fetchProfiles = useCallback(async (userIds: string[]) => {
     if (userIds.length === 0) return {}
+    const supabase = getSupabase()
+    if (!supabase) return {}
     const { data } = await supabase
       .from("profiles")
       .select("user_id, display_name, avatar_url")
@@ -108,6 +112,7 @@ export default function GlobalChatPage() {
   }, [appUser?.id, appUser?.name, appUser?.avatar])
 
   useEffect(() => {
+    const supabase = getSupabase()
     if (!supabase || !appUser) return
 
     chatLoadedRef.current = false
@@ -280,7 +285,12 @@ export default function GlobalChatPage() {
     if (!text || !globalId || !authUserId.current || sending) return
 
     setSending(true)
-    const { data: inserted, error: insertErr } = await supabase!
+    const supabase = getSupabase()
+    if (!supabase) {
+      setSending(false)
+      return
+    }
+    const { data: inserted, error: insertErr } = await supabase
       .from("messages")
       .insert({
         conversation_id: globalId,

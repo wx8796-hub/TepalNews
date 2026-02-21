@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { toast } from "sonner"
-import { supabase } from "@/lib/supabase-browser"
+import { getSupabase } from "@/lib/supabase-browser"
 import { useAuth } from "@/lib/auth-context"
 import { withTimeout } from "@/lib/promise-utils"
 import { setAuthCookie } from "@/lib/auth-cookie"
@@ -49,6 +49,7 @@ function AuthPageContent() {
 
   // 세이프가드: 이미 로그인된 상태면 next 또는 "/"로 이동 (next는 URL에서 직접 읽어서 리다이렉트 직후에도 올바르게 복귀)
   useEffect(() => {
+    const supabase = getSupabase()
     if (!supabase) return
     let cancelled = false
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -86,8 +87,9 @@ const handleLogin = async () => {
       setError("Please enter your email and password.")
       return
     }
+    const supabase = getSupabase()
     if (!supabase) {
-      setError("Sign-in is not available. Add Supabase env vars to .env.local, or use Demo login below.")
+      setError("Sign-in is not available. Add Supabase env vars to .env.local (or Vercel env), or use Demo login below.")
       return
     }
     setLoading(true)
@@ -189,6 +191,7 @@ const handleLogin = async () => {
       setError("Password must be at least 6 characters.")
       return
     }
+    const supabase = getSupabase()
     if (!supabase) {
       setError("Sign-up is not available. Add Supabase env vars to .env.local, or use Demo login below.")
       return
@@ -283,7 +286,7 @@ const handleLogin = async () => {
     }
   }
 
-  if (user && supabase) {
+  if (user && getSupabase()) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <div className="rounded-2xl border border-border bg-card p-8 shadow-lg text-center max-w-sm">
@@ -344,7 +347,7 @@ const handleLogin = async () => {
               <TabsTrigger value="signup" className="flex-1">Sign up</TabsTrigger>
             </TabsList>
             <p className="text-xs text-muted-foreground mb-4">
-              {!mounted ? "Sign in to use TePal News." : supabase ? "Supabase: connected" : "Supabase: not configured — use Demo login below."}
+              {!mounted ? "Sign in to use TePal News." : getSupabase() ? "Supabase: connected" : "Supabase: not configured — use Demo login below."}
               {mounted && supabaseHost && (
                 <span className="block mt-1 text-[10px] text-muted-foreground/80" title="Verify this is your project">
                   Host: {supabaseHost}
@@ -401,7 +404,7 @@ const handleLogin = async () => {
                   </Button>
                 )}
               </form>
-              {DEV_BYPASS_AUTH && mounted && !supabase && signInDemo && (
+              {DEV_BYPASS_AUTH && mounted && !getSupabase() && signInDemo && (
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
                     <span className="w-full border-t border-border" />
@@ -411,7 +414,7 @@ const handleLogin = async () => {
                   </div>
                 </div>
               )}
-              {DEV_BYPASS_AUTH && mounted && !supabase && signInDemo && (
+              {DEV_BYPASS_AUTH && mounted && !getSupabase() && signInDemo && (
                 <Button
                   type="button"
                   variant="outline"
@@ -490,10 +493,11 @@ const handleLogin = async () => {
                       variant="outline"
                       size="sm"
                       className="w-full"
-                      disabled={resetSent || !supabase}
+                      disabled={resetSent || !getSupabase()}
                       onClick={async () => {
-                        if (!supabase || !alreadyRegisteredEmail) return
-                        const { error: resetErr } = await supabase.auth.resetPasswordForEmail(alreadyRegisteredEmail, {
+                        const sb = getSupabase()
+                        if (!sb || !alreadyRegisteredEmail) return
+                        const { error: resetErr } = await sb.auth.resetPasswordForEmail(alreadyRegisteredEmail, {
                           redirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth` : undefined,
                         })
                         if (resetErr) {

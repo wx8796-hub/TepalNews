@@ -13,22 +13,23 @@ const noOpLock = async (
 
 let _client: SupabaseClient | null = null
 
-function getSupabase(): SupabaseClient | null {
+function createSupabaseClient(urlStr: string, anonKeyStr: string): SupabaseClient {
+  return createClient(urlStr, anonKeyStr, { auth: { lock: noOpLock } })
+}
+
+function getSupabaseSync(): SupabaseClient | null {
   if (!hasEnv) {
     if (typeof window !== "undefined") {
-      const u = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const a = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      console.error("[Supabase] Missing env: URL=", u ? new URL(u as string).hostname : "undefined", "anonKey length=", typeof a === "string" ? a.length : 0)
+      console.warn("[Supabase] No build-time env; client will try /api/config/supabase at runtime.")
     }
     return null
   }
   if (typeof window === "undefined") return null
   if (!_client) {
-    _client = createClient(url as string, anonKey as string, { auth: { lock: noOpLock } })
+    _client = createSupabaseClient(url as string, anonKey as string)
     if (process.env.NODE_ENV === "development") {
       try {
-        const u = process.env.NEXT_PUBLIC_SUPABASE_URL
-        console.log("[Supabase] Client created. URL domain:", u ? new URL(u as string).hostname : "?", "anonKey length:", (anonKey as string).length)
+        console.log("[Supabase] Client created from env. URL:", new URL(url as string).hostname)
       } catch {
         console.warn("[Supabase] Could not log URL (invalid?)")
       }
@@ -37,5 +38,69 @@ function getSupabase(): SupabaseClient | null {
   return _client
 }
 
-/** Only created in the browser to avoid Navigator LockManager / lock timeout on server. */
-export const supabase = getSupabase()
+/**
+ * Returns the Supabase client. Use this instead of the `supabase` export so that
+ * runtime config (from /api/config/supabase) is used when build-time env is missing (e.g. Vercel).
+ */
+export function getSupabase(): SupabaseClient | null {
+  if (_client) return _client
+  return getSupabaseSync()
+}
+
+/**
+ * When build-time env is missing (e.g. after deploy), fetches config from API and creates the client.
+ * Call once on app init (e.g. in AuthProvider) when getSupabase() is null.
+ * Uses bundle URL (NEXT_PUBLIC_SUPABASE_URL) when API doesn't return url — so "Host" can show but anon key from API.
+ */
+export async function ensureSupabaseFromApi(): Promise<SupabaseClient | null> {
+  if (_client) return _client
+  if (typeof window === "undefined") return null
+
+  const bundleUrl =
+    typeof process !== "undefined" &&
+    typeof process.env.NEXT_PUBLIC_SUPABASE_URL === "string" &&
+    process.env.NEXT_PUBLIC_SUPABASE_URL.length > 0
+      ? process.env.NEXT_PUBLIC_SUPABASE_URL
+      : null
+
+  const tryFetch = async (): Promise<SupabaseClient | null> => {
+    const res = await fetch("/api/config/supabase", { cache: "no-store" })
+    let data: { configured?: boolean; url?: string; anonKey?: string } | null = null
+    try {
+      data = await res.json()
+    } catch {
+      if (!res.ok && process.env.NODE_ENV === "development") {
+        console.warn("[Supabase] /api/config/supabase not JSON", res.status)
+      }
+      return null
+    }
+    const url = data?.url || bundleUrl
+    const anonKey = data?.anonKey
+    if (url && anonKey) {
+      _client = createSupabaseClient(url, anonKey)
+      if (process.env.NODE_ENV === "development") {
+        console.log("[Supabase] Client created from /api/config/supabase")
+      }
+      return _client
+    }
+    if (!res.ok && process.env.NODE_ENV === "development" && data?.hint) {
+      console.warn("[Supabase]", data.hint)
+    }
+    return null
+  }
+
+  try {
+    let client = await tryFetch()
+    if (!client) {
+      await new Promise((r) => setTimeout(r, 1000))
+      client = await tryFetch()
+    }
+    if (!client && hasEnv) client = getSupabaseSync()
+    return client
+  } catch (e) {
+    console.error("[Supabase] ensureSupabaseFromApi failed", e)
+    if (hasEnv) return getSupabaseSync()
+    return null
+  }
+}
+
