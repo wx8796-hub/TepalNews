@@ -11,6 +11,45 @@ type Params = { params: Promise<{ id: string }> }
 const FEED_SELECT =
   "id, author_id, type, title, content, link_url, tags, is_hidden, created_at, updated_at, display_name, avatar_url, bio, like_count, comment_count, media"
 
+/** GET single post; optional Authorization for liked flag */
+export async function GET(request: Request, { params }: Params) {
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: "Database not configured" }, { status: 503 })
+  }
+  const { id } = await params
+  const { data: feedRow, error } = await supabaseAdmin
+    .from("posts_feed")
+    .select(FEED_SELECT)
+    .eq("id", id)
+    .single()
+  if (error || !feedRow) {
+    console.error("posts GET [id]", error)
+    return NextResponse.json({ error: error?.message ?? "Not found" }, { status: 404 })
+  }
+  const post = mapRowToPost(feedRow as PostsFeedRow)
+  let userId: string | null = null
+  const authHeader = request.headers.get("authorization")
+  const token = authHeader?.replace(/^Bearer\s+/i, "").trim()
+  if (token && supabaseAdmin) {
+    const { data: { user } } = await supabaseAdmin.auth.getUser(token)
+    if (user) userId = user.id
+  }
+  if (!userId && request.headers.get("x-user-id") === "admin" && process.env.SUPABASE_ADMIN_UID) {
+    userId = process.env.SUPABASE_ADMIN_UID
+  }
+  let liked = false
+  if (userId) {
+    const { data: likeRow } = await supabaseAdmin
+      .from("post_likes")
+      .select("post_id")
+      .eq("post_id", id)
+      .eq("user_id", userId)
+      .maybeSingle()
+    liked = !!likeRow
+  }
+  return NextResponse.json({ ...post, liked })
+}
+
 export async function PATCH(request: Request, { params }: Params) {
   if (!supabaseAdmin) {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 })

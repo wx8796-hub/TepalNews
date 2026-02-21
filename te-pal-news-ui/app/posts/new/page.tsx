@@ -135,6 +135,7 @@ export default function CreatePostPage() {
       toast.success("Posted!")
       router.push(`/posts/${saved.id}`)
     } catch (e) {
+      console.error("addPost", e)
       toast.error(e instanceof Error ? e.message : "Failed to save post")
     } finally {
       setLoading(false)

@@ -24,7 +24,8 @@ type PostsContextValue = {
   setManualHotTopicId: (id: string | null) => void
   loading: boolean
   error: string | null
-  refetch: () => Promise<void>
+  /** Refetch feed. Pass token to include Authorization so liked state is returned. */
+  refetch: (token?: string | null) => Promise<void>
 }
 
 const PostsContext = createContext<PostsContextValue | null>(null)
@@ -54,11 +55,13 @@ export function PostsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const refetch = useCallback(async () => {
+  const refetch = useCallback(async (token?: string | null) => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch("/api/posts")
+      const headers: HeadersInit = {}
+      if (token) headers.Authorization = `Bearer ${token}`
+      const res = await fetch("/api/posts", { headers })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || `Failed to load posts (${res.status})`)

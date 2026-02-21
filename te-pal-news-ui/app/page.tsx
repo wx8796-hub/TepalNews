@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { HotTopicHero } from "@/components/hot-topic-hero"
 import { WeeklyBestTop3 } from "@/components/weekly-best-top3"
 import { PostCard } from "@/components/post-card"
+import { useAuth } from "@/lib/auth-context"
 import { usePosts, useWeeklyBest, useHotTopic } from "@/lib/posts-context"
 import type { Post } from "@/lib/mock-data"
 
@@ -24,6 +25,7 @@ const PAGE_SIZE = 20
 const TRENDING_SCORE = (p: Post) => p.likes * 2 + p.comments * 3
 
 export default function HomePage() {
+  const { user, getAccessToken } = useAuth()
   const { posts, loading, error, refetch } = usePosts()
   const weeklyBest = useWeeklyBest()
   const hotTopic = useHotTopic()
@@ -59,6 +61,11 @@ export default function HomePage() {
 
   const visiblePosts = filteredPosts.slice(0, page * PAGE_SIZE)
   const hasMore = visiblePosts.length < filteredPosts.length
+
+  useEffect(() => {
+    if (!user) return
+    getAccessToken().then((token) => refetch(token ?? undefined))
+  }, [user?.id, getAccessToken, refetch])
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6 space-y-6">

@@ -26,8 +26,12 @@ export function AppBar() {
               <span>New Post</span>
             </Link>
           </Button>
-          <Button variant={pathname.startsWith("/chat") ? "secondary" : "ghost"} size="sm" asChild>
-            <Link href="/chat">
+          <Button
+            variant={pathname.startsWith("/chat") ? "secondary" : "ghost"}
+            size="sm"
+            asChild
+          >
+            <Link href="/chat" prefetch={false} data-e2e="nav-chat-link">
               <MessageCircle className="size-4" />
               <span>Chat</span>
             </Link>

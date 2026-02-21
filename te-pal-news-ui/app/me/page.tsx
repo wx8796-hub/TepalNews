@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { LogOut, Pencil, Heart, FileText, ImagePlus } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -32,8 +33,9 @@ function getInitials(name: string, fallback = "?"): string {
 }
 
 export default function ProfilePage() {
-  const { user, signOut } = useAuth()
-  const { posts } = usePosts()
+  const router = useRouter()
+  const { user, signOut, getAccessToken, refreshProfile } = useAuth()
+  const { posts, refetch: refetchPosts } = usePosts()
   if (!user) return null
   const myPosts = posts.filter((p) => p.author.id === user.id)
   const likedPosts = posts.filter((p) => p.liked)
@@ -41,32 +43,103 @@ export default function ProfilePage() {
   const [bio, setBio] = useState(user.bio || "")
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [editOpen, setEditOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
+  const pendingAvatarFileRef = useRef<File | null>(null)
+
+  useEffect(() => {
+    setDisplayName(user.name)
+    setBio(user.bio || "")
+    const url = typeof user.avatar === "string" && user.avatar.startsWith("http") ? user.avatar : null
+    if (url) setAvatarUrl(url)
+  }, [user.id, user.name, user.bio, user.avatar])
 
   useEffect(() => {
     if (typeof window === "undefined") return
     const stored = window.localStorage.getItem("tepale_profile_avatar")
-    if (stored) setAvatarUrl(stored)
-  }, [])
+    if (stored && !avatarUrl) setAvatarUrl(stored)
+  }, [avatarUrl])
 
   const profileInitials = getInitials(displayName, user.avatar)
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !file.type.startsWith("image/")) return
+    pendingAvatarFileRef.current = file
     const reader = new FileReader()
     reader.onload = () => {
-      const url = reader.result as string
-      setAvatarUrl(url)
-      if (typeof window !== "undefined") window.localStorage.setItem("tepale_profile_avatar", url)
+      setAvatarUrl(reader.result as string)
+      if (typeof window !== "undefined") window.localStorage.setItem("tepale_profile_avatar", reader.result as string)
     }
     reader.readAsDataURL(file)
     e.target.value = ""
   }
 
-  const handleSave = () => {
-    toast.success("Profile updated!")
-    setEditOpen(false)
+  const handleSave = async () => {
+    console.log("[profile] save clicked")
+    const token = await getAccessToken()
+    if (!token) {
+      toast.error("Not signed in")
+      return
+    }
+    setSaving(true)
+    try {
+      let avatar_url: string | undefined
+      const file = pendingAvatarFileRef.current
+      if (file) {
+        const form = new FormData()
+        form.set("file", file)
+        const uploadRes = await fetch("/api/upload/avatar", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: form,
+        })
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json().catch(() => ({}))
+          throw new Error(err.error || "Avatar upload failed")
+        }
+        const { url } = await uploadRes.json()
+        avatar_url = url
+        pendingAvatarFileRef.current = null
+        if (typeof window !== "undefined") window.localStorage.removeItem("tepale_profile_avatar")
+      }
+
+      const body: { displayName: string; bio: string | null; avatar_url?: string } = {
+        displayName: (displayName?.trim() && displayName.trim()) || user.name || "User",
+        bio: bio?.trim() || null,
+      }
+      if (avatar_url !== undefined) body.avatar_url = avatar_url
+
+      console.log("[profile] sending POST /api/auth/profile", { displayName: body.displayName })
+      const profileRes = await fetch("/api/auth/profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      })
+      const resData = await profileRes.json().catch(() => ({}))
+      console.log("[profile] response", profileRes.status, resData)
+      if (!profileRes.ok) {
+        const msg = typeof resData?.error === "string" ? resData.error : "Failed to save profile"
+        console.error("[profile] save failed", profileRes.status, resData)
+        toast.error(msg)
+        return
+      }
+
+      await refreshProfile()
+      await refetchPosts()
+      router.refresh()
+      if (avatar_url) setAvatarUrl(avatar_url)
+      toast.success("Profile updated!")
+      setEditOpen(false)
+    } catch (e) {
+      console.error(e)
+      toast.error(e instanceof Error ? e.message : "Failed to save profile")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -146,8 +219,8 @@ export default function ProfilePage() {
                     rows={3}
                   />
                 </div>
-                <Button className="w-full" onClick={handleSave}>
-                  Save changes
+                <Button className="w-full" onClick={handleSave} disabled={saving}>
+                  {saving ? "Saving…" : "Save changes"}
                 </Button>
               </div>
             </DialogContent>

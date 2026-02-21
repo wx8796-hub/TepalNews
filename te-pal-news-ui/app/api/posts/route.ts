@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase-server"
+import { getRequestUserId } from "@/lib/api-auth"
 import { mapRowToPost, postToInsertRow } from "@/lib/posts-api"
 import type { Post } from "@/lib/mock-data"
 import type { PostsFeedRow } from "@/lib/posts-api"
@@ -9,9 +10,12 @@ export const dynamic = "force-dynamic"
 const FEED_SELECT =
   "id, author_id, type, title, content, link_url, tags, is_hidden, created_at, updated_at, display_name, avatar_url, bio, like_count, comment_count, media"
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!supabaseAdmin) {
-    return NextResponse.json([])
+    return NextResponse.json(
+      { error: "Database not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to .env.local." },
+      { status: 503 }
+    )
   }
   const { data, error } = await supabaseAdmin
     .from("posts_feed")
@@ -32,7 +36,23 @@ export async function GET() {
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-  const posts = (data ?? []).map((row) => mapRowToPost(row as PostsFeedRow))
+  const rows = (data ?? []) as PostsFeedRow[]
+  const posts: Post[] = rows.map((row) => mapRowToPost(row))
+
+  const auth = await getRequestUserId(request)
+  if (!("error" in auth) && auth.userId && posts.length > 0) {
+    const postIds = posts.map((p) => p.id)
+    const { data: likeRows } = await supabaseAdmin
+      .from("post_likes")
+      .select("post_id")
+      .eq("user_id", auth.userId)
+      .in("post_id", postIds)
+    const likedSet = new Set((likeRows ?? []).map((r) => r.post_id))
+    posts.forEach((p) => {
+      p.liked = likedSet.has(p.id)
+    })
+  }
+
   return NextResponse.json(posts)
 }
 
@@ -52,9 +72,19 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
-  const authorId = body.author?.id
+  let authorId = body.author?.id
   if (!authorId) {
     return NextResponse.json({ error: "author.id required" }, { status: 400 })
+  }
+  if (authorId === "admin") {
+    const adminUid = process.env.SUPABASE_ADMIN_UID
+    if (!adminUid) {
+      return NextResponse.json(
+        { error: "Admin posting: set SUPABASE_ADMIN_UID to a valid Supabase auth user UUID in env." },
+        { status: 400 }
+      )
+    }
+    authorId = adminUid
   }
   const insertRow = postToInsertRow(body, authorId)
   const { data: inserted, error: insertError } = await supabaseAdmin
@@ -75,7 +105,10 @@ export async function POST(request: Request) {
       sort_order: i,
     }))
     const { error: mediaErr } = await supabaseAdmin.from("post_media").insert(mediaRows)
-    if (mediaErr) console.error("post_media insert", mediaErr)
+    if (mediaErr) {
+      console.error("post_media insert", mediaErr)
+      return NextResponse.json({ error: `Post created but media failed: ${mediaErr.message}` }, { status: 500 })
+    }
   }
   const { data: feedRow, error: fetchErr } = await supabaseAdmin
     .from("posts_feed")

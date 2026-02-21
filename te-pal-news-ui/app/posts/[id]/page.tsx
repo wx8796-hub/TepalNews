@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
   ArrowLeft,
@@ -26,48 +26,148 @@ import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { usePosts } from "@/lib/posts-context"
 import { useAuth } from "@/lib/auth-context"
-import type { Comment } from "@/lib/mock-data"
+import type { Comment, Post } from "@/lib/mock-data"
 import { Trash2 } from "lucide-react"
+import { formatDistanceToNow } from "date-fns"
 
 export default function PostDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { user } = useAuth()
-  const { posts, deletePost } = usePosts()
-  const post = posts.find((p) => p.id === params.id)
-  const isOwnPost = user && post?.author.id === user.id
+  const { user, getAccessToken } = useAuth()
+  const { posts, deletePost, refetch } = usePosts()
+  const postId = typeof params.id === "string" ? params.id : ""
+  const [post, setPost] = useState<Post | null>(posts.find((p) => p.id === postId) ?? null)
+  const [postLoading, setPostLoading] = useState(!!postId)
   const [liked, setLiked] = useState(post?.liked ?? false)
   const [likeCount, setLikeCount] = useState(post?.likes ?? 0)
   const [newComment, setNewComment] = useState("")
   const [comments, setComments] = useState<Comment[]>([])
+  const [commentsLoading, setCommentsLoading] = useState(false)
   const [likedCommentIds, setLikedCommentIds] = useState<Set<string>>(new Set())
 
-  if (!post) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-muted-foreground">Post not found.</p>
-      </div>
-    )
+  const isOwnPost = user && post?.author.id === user.id
+
+  const authHeaders = useCallback(async (): Promise<HeadersInit> => {
+    if (user?.id === "admin") return { "X-User-Id": "admin" }
+    const token = await getAccessToken()
+    if (token) return { Authorization: `Bearer ${token}` }
+    return {}
+  }, [user?.id, getAccessToken])
+
+  const authBody = useCallback(() => {
+    if (user?.id === "admin") return { userId: "admin" as const }
+    return {}
+  }, [user?.id])
+
+  useEffect(() => {
+    if (!postId) {
+      setPostLoading(false)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      const headers = await authHeaders()
+      const res = await fetch(`/api/posts/${encodeURIComponent(postId)}`, { headers })
+      if (cancelled) return
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        toast.error((data as { error?: string }).error ?? "Failed to load post")
+        setPost(null)
+        setPostLoading(false)
+        return
+      }
+      const data = (await res.json()) as Post & { liked?: boolean }
+      setPost({ ...data, liked: data.liked ?? false })
+      setLiked(data.liked ?? false)
+      setLikeCount(data.likes ?? 0)
+      setPostLoading(false)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [postId, authHeaders])
+
+  useEffect(() => {
+    if (!postId) return
+    setCommentsLoading(true)
+    fetch(`/api/posts/${encodeURIComponent(postId)}/comments`)
+      .then((res) => res.json())
+      .then((data) => {
+        const list = (data as { comments?: Array<{ id: string; author: { id: string; name: string; avatar: string }; body: string; created_at: string }> }).comments ?? []
+        setComments(
+          list.map((c) => ({
+            id: c.id,
+            author: c.author,
+            content: c.body,
+            createdAt: c.created_at && !Number.isNaN(Date.parse(c.created_at))
+              ? formatDistanceToNow(new Date(c.created_at), { addSuffix: true })
+              : "Just now",
+            likes: 0,
+          }))
+        )
+      })
+      .catch((e) => {
+        console.error("comments fetch", e)
+        toast.error("Failed to load comments")
+      })
+      .finally(() => setCommentsLoading(false))
+  }, [postId])
+
+  const toggleLike = async () => {
+    if (!user) {
+      toast.error("Sign in to like")
+      return
+    }
+    const nextLiked = !liked
+    setLiked(nextLiked)
+    setLikeCount((c) => (nextLiked ? c + 1 : c - 1))
+    const headers: HeadersInit = { "Content-Type": "application/json", ...(await authHeaders()) }
+    const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/like`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ liked: nextLiked, ...authBody() }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setLiked(!nextLiked)
+      setLikeCount((c) => (nextLiked ? c - 1 : c + 1))
+      toast.error((data as { error?: string }).error ?? "Like failed")
+      console.error("like", data)
+    }
   }
 
-  const toggleLike = () => {
-    setLiked(!liked)
-    setLikeCount(liked ? likeCount - 1 : likeCount + 1)
-  }
-
-  const sendComment = () => {
+  const sendComment = async () => {
     if (!newComment.trim()) return
+    if (!user) {
+      toast.error("Sign in to comment")
+      return
+    }
+    const body = newComment.trim()
+    setNewComment("")
+    const headers: HeadersInit = { "Content-Type": "application/json", ...(await authHeaders()) }
+    const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ body, ...authBody() }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      toast.error((data as { error?: string }).error ?? "Failed to post comment")
+      console.error("comment", data)
+      setNewComment(body)
+      return
+    }
+    const c = data as { id: string; author: { id: string; name: string; avatar: string }; body: string; created_at: string }
     setComments((prev) => [
       ...prev,
       {
-        id: `c-${Date.now()}`,
-        author: user!,
-        content: newComment.trim(),
+        id: c.id,
+        author: c.author,
+        content: c.body,
         createdAt: "Just now",
         likes: 0,
       },
     ])
-    setNewComment("")
     toast.success("Comment added!")
   }
 
@@ -84,7 +184,23 @@ export default function PostDetailPage() {
       toast.success("Post deleted.")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to delete post")
+      console.error(e)
     }
+  }
+
+  if (postLoading && !post) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    )
+  }
+  if (!post) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-muted-foreground">Post not found.</p>
+      </div>
+    )
   }
 
   const toggleCommentLike = (commentId: string) => {
