@@ -63,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isDemo, setIsDemo] = useState(false)
   const [supabaseReady, setSupabaseReady] = useState(false)
 
+  // 이미 클라이언트 있으면(번들 env 또는 eager init) 바로 준비 완료. 없을 때만 API 호출해 대기
   useEffect(() => {
     if (getSupabase()) {
       setSupabaseReady(true)

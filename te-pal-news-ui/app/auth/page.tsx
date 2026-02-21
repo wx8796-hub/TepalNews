@@ -347,7 +347,7 @@ const handleLogin = async () => {
               <TabsTrigger value="signup" className="flex-1">Sign up</TabsTrigger>
             </TabsList>
             <p className="text-xs text-muted-foreground mb-4">
-              {!mounted ? "Sign in to use TePal News." : getSupabase() ? "Supabase: connected" : supabaseHost ? "Supabase: connecting failed — set NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel env and redeploy (without cache), or use Demo login." : "Supabase: not configured — use Demo login below."}
+              {!mounted ? "Sign in to use TePal News." : getSupabase() ? "Supabase: connected" : supabaseHost ? "Supabase: connecting failed — 브라우저에서 /api/config/supabase/debug 열어 서버 env 확인 후, Vercel env 설정·캐시 제거 재배포 또는 Demo 로그인." : "Supabase: not configured — use Demo login below."}
               {mounted && supabaseHost && (
                 <span className="block mt-1 text-[10px] text-muted-foreground/80" title="Verify this is your project">
                   Host: {supabaseHost}

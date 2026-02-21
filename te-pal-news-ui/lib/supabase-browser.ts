@@ -71,26 +71,24 @@ export async function ensureSupabaseFromApi(): Promise<SupabaseClient | null> {
   const tryFetch = async (): Promise<SupabaseClient | null> => {
     const base = typeof window !== "undefined" ? window.location.origin : ""
     const res = await fetch(`${base}/api/config/supabase`, { cache: "no-store" })
-    let data: { configured?: boolean; url?: string; anonKey?: string } | null = null
+    let data: { configured?: boolean; url?: string; anonKey?: string; missing?: string[]; hint?: string } | null = null
     try {
       data = await res.json()
     } catch {
-      if (!res.ok && process.env.NODE_ENV === "development") {
-        console.warn("[Supabase] /api/config/supabase not JSON", res.status)
-      }
+      console.warn("[Supabase] /api/config/supabase not JSON, status:", res.status)
       return null
     }
     const url = data?.url || bundleUrl
     const anonKey = data?.anonKey
     if (url && anonKey) {
       _client = createSupabaseClient(url, anonKey)
-      if (process.env.NODE_ENV === "development") {
-        console.log("[Supabase] Client created from /api/config/supabase")
+      if (typeof window !== "undefined") {
+        console.info("[Supabase] Client created from /api/config/supabase")
       }
       return _client
     }
-    if (!res.ok && process.env.NODE_ENV === "development" && data?.hint) {
-      console.warn("[Supabase]", data.hint)
+    if (!res.ok && typeof window !== "undefined") {
+      console.warn("[Supabase] config API", res.status, data?.missing ? { missing: data.missing } : data?.hint ?? "")
     }
     return null
   }
@@ -98,7 +96,7 @@ export async function ensureSupabaseFromApi(): Promise<SupabaseClient | null> {
   try {
     let client = await tryFetch()
     if (!client) {
-      await new Promise((r) => setTimeout(r, 1000))
+      await new Promise((r) => setTimeout(r, 400))
       client = await tryFetch()
     }
     if (!client && hasEnv) client = getSupabaseSync()
