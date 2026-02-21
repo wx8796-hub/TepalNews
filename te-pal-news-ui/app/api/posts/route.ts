@@ -22,6 +22,7 @@ export async function GET(request: Request) {
     .select(FEED_SELECT)
     .eq("is_hidden", false)
     .order("created_at", { ascending: false })
+    .limit(50)
   if (error) {
     console.error("posts GET", error)
     const msg = error.message || ""
@@ -53,7 +54,11 @@ export async function GET(request: Request) {
     })
   }
 
-  return NextResponse.json(posts)
+  return NextResponse.json(posts, {
+    headers: {
+      "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30",
+    },
+  })
 }
 
 export async function POST(request: Request) {

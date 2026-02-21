@@ -3,6 +3,8 @@ export interface User {
   name: string
   avatar: string
   bio?: string
+  /** 로그인 계정 이메일 (Admin 접근 판단 등에 사용) */
+  email?: string
 }
 
 export interface Post {

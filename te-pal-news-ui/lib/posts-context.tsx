@@ -118,14 +118,17 @@ export function PostsProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const deletePost = useCallback(async (id: string) => {
+  const deletePost = useCallback(async (id: string, token?: string | null) => {
     try {
+      const headers: HeadersInit = {}
+      if (token) headers.Authorization = `Bearer ${token}`
       const res = await fetch(`/api/posts/${encodeURIComponent(id)}`, {
         method: "DELETE",
+        headers,
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || "Failed to delete post")
+        throw new Error((data as { error?: string }).error || "Failed to delete post")
       }
       setPosts((prev) => prev.filter((p) => p.id !== id))
       setManualHotTopicId((mid) => (mid === id ? null : mid))

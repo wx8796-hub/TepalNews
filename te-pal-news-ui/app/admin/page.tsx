@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Flame, Search, Shield, Eye, EyeOff, X, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +15,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
+import { useAuth } from "@/lib/auth-context"
 import { usePosts, useHotTopic } from "@/lib/posts-context"
 import type { Post } from "@/lib/mock-data"
 
@@ -32,10 +34,19 @@ const mockReports: Report[] = [
 ]
 
 export default function AdminPage() {
+  const router = useRouter()
+  const { user, loading: authLoading, canAccessAdmin } = useAuth()
   const { posts, clearPosts, manualHotTopicId, setManualHotTopicId } = usePosts()
   const [searchQuery, setSearchQuery] = useState("")
   const [reports, setReports] = useState(mockReports)
   const hotTopic = useHotTopic()
+
+  useEffect(() => {
+    if (authLoading) return
+    if (!canAccessAdmin) {
+      router.replace("/")
+    }
+  }, [authLoading, canAccessAdmin, router])
 
   const handleClearAllPosts = () => {
     clearPosts()
@@ -55,6 +66,16 @@ export default function AdminPage() {
       prev.map((r) => (r.id === id ? { ...r, hidden: !r.hidden } : r))
     )
     toast.success("Report status updated.")
+  }
+
+  if (authLoading || !canAccessAdmin) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <p className="text-sm text-muted-foreground">
+          {authLoading ? "Loading..." : null}
+        </p>
+      </div>
+    )
   }
 
   return (

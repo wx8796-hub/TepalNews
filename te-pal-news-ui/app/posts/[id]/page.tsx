@@ -33,7 +33,7 @@ import { formatDistanceToNow } from "date-fns"
 export default function PostDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { user, getAccessToken } = useAuth()
+  const { user, getAccessToken, canAccessAdmin } = useAuth()
   const { posts, deletePost, refetch } = usePosts()
   const postId = typeof params.id === "string" ? params.id : ""
   const [post, setPost] = useState<Post | null>(posts.find((p) => p.id === postId) ?? null)
@@ -46,6 +46,7 @@ export default function PostDetailPage() {
   const [likedCommentIds, setLikedCommentIds] = useState<Set<string>>(new Set())
 
   const isOwnPost = user && post?.author.id === user.id
+  const canDeletePost = isOwnPost || canAccessAdmin
 
   const authHeaders = useCallback(async (): Promise<HeadersInit> => {
     if (user?.id === "admin") return { "X-User-Id": "admin" }
@@ -171,15 +172,29 @@ export default function PostDetailPage() {
     toast.success("Comment added!")
   }
 
-  const deleteComment = (commentId: string) => {
-    setComments((prev) => prev.filter((c) => c.id !== commentId))
-    toast.success("Comment removed.")
+  const deleteComment = async (commentId: string) => {
+    try {
+      const headers = await authHeaders()
+      const res = await fetch(
+        `/api/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`,
+        { method: "DELETE", headers }
+      )
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error((data as { error?: string }).error ?? "Failed to delete comment")
+      }
+      setComments((prev) => prev.filter((c) => c.id !== commentId))
+      toast.success("Comment removed.")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete comment")
+    }
   }
 
   const handleDeletePost = async () => {
     if (!post) return
     try {
-      await deletePost(post.id)
+      const token = await getAccessToken()
+      await deletePost(post.id, token ?? undefined)
       router.push("/")
       toast.success("Post deleted.")
     } catch (e) {
@@ -238,6 +253,8 @@ export default function PostDetailPage() {
                 <img
                   src={src}
                   alt={`${post.title || "Post"} image ${i + 1}`}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-contain"
                 />
               </div>
@@ -266,7 +283,7 @@ export default function PostDetailPage() {
                 <span className="text-xs text-muted-foreground">{post.createdAt}</span>
               </div>
             </div>
-            {isOwnPost && (
+            {canDeletePost && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon-sm">
@@ -274,9 +291,11 @@ export default function PostDetailPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild>
-                    <Link href={`/posts/${post.id}/edit`}>Edit</Link>
-                  </DropdownMenuItem>
+                  {isOwnPost && (
+                    <DropdownMenuItem asChild>
+                      <Link href={`/posts/${post.id}/edit`}>Edit</Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem
                     className="text-destructive"
                     onClick={handleDeletePost}
@@ -371,7 +390,7 @@ export default function PostDetailPage() {
                           {comment.author.name}
                         </span>
                         <span className="text-xs text-muted-foreground">{comment.createdAt}</span>
-                        {user && comment.author.id === user.id && (
+                        {user && (comment.author.id === user.id || canAccessAdmin) && (
                           <button
                             type="button"
                             onClick={() => deleteComment(comment.id)}

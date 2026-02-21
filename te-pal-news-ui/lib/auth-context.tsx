@@ -28,6 +28,14 @@ export const ADMIN_USER: User = {
   bio: "Admin access",
 }
 
+/** Admin 기능은 id 또는 email이 wx8796으로 시작하는 계정만 사용 가능 */
+export function canAccessAdmin(user: User | null): boolean {
+  if (!user) return false
+  return Boolean(
+    user.id?.startsWith("wx8796") || user.email?.toLowerCase().startsWith("wx8796")
+  )
+}
+
 type AuthContextValue = {
   user: User | null
   loading: boolean
@@ -35,6 +43,8 @@ type AuthContextValue = {
   isDemo: boolean
   signInDemo?: (user: User) => void
   signInAsAdmin: () => void
+  /** Admin 메뉴/페이지 접근 가능 여부 (wx8796으로 시작하는 계정만) */
+  canAccessAdmin: boolean
   /** For API calls that require Bearer token (Supabase auth). Returns null for demo/admin. */
   getAccessToken: () => Promise<string | null>
   /** Refetch current user from profiles and update context (e.g. after Edit Profile save). */
@@ -94,15 +104,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const fetchProfile = useCallback(async (userId: string): Promise<User | null> => {
+  /** Fetches profile from DB only. Returns null if no row (so we can create from metadata). */
+  const fetchProfileFromDb = useCallback(async (userId: string): Promise<User | null> => {
     const supabase = getSupabase()
     if (!supabase) return null
-    const { data } = await supabase
+    const { data: byUserId } = await supabase
       .from("profiles")
       .select("user_id, display_name, bio, avatar_url")
       .eq("user_id", userId)
-      .single()
-    if (data) return profileToUser(data as ProfileRow)
+      .maybeSingle()
+    if (byUserId) return profileToUser(byUserId as ProfileRow)
+    const { data: byId } = await supabase
+      .from("profiles")
+      .select("user_id, display_name, bio, avatar_url")
+      .eq("id", userId)
+      .maybeSingle()
+    if (byId) return profileToUser({ ...byId, user_id: (byId as { user_id?: string; id?: string }).user_id ?? (byId as { id?: string }).id ?? userId } as ProfileRow)
+    return null
+  }, [])
+
+  const fetchProfile = useCallback(async (userId: string): Promise<User | null> => {
+    const supabase = getSupabase()
+    if (!supabase) return null
+    const fromDb = await fetchProfileFromDb(userId)
+    if (fromDb) return fromDb
     const { data: { user: authUser } } = await supabase.auth.getUser()
     if (!authUser) return null
     const fallback: User = {
@@ -110,9 +135,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       name: (authUser.user_metadata?.name as string) || authUser.email?.split("@")[0] || "User",
       avatar: "?",
       bio: (authUser.user_metadata?.bio as string) || undefined,
+      email: authUser.email ?? undefined,
     }
     return fallback
-  }, [])
+  }, [fetchProfileFromDb])
 
   useEffect(() => {
     if (!supabaseReady) return
@@ -160,8 +186,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return
         clearTimeout(timeout)
         if (session?.user) {
-          await ensureProfile(session.access_token ?? "", session.user.user_metadata as { name?: string; bio?: string } | undefined)
-          const u = await fetchProfile(session.user.id)
+          let u = await fetchProfileFromDb(session.user.id)
+          if (!u) {
+            await ensureProfile(session.access_token ?? "", session.user.user_metadata as { name?: string; bio?: string } | undefined)
+            u = await fetchProfile(session.user.id)
+          }
+          if (u && session.user.email) u.email = session.user.email
           if (!cancelled) setUser(u ?? null)
         } else {
           if (DEV_BYPASS_AUTH && typeof window !== "undefined") {
@@ -190,8 +220,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (typeof window !== "undefined" && session.access_token) {
             setAuthCookie(session.access_token)
           }
-          await ensureProfile(session.access_token ?? "", session.user.user_metadata as { name?: string; bio?: string } | undefined)
-          const u = await fetchProfile(session.user.id)
+          let u = await fetchProfileFromDb(session.user.id)
+          if (!u) {
+            await ensureProfile(session.access_token ?? "", session.user.user_metadata as { name?: string; bio?: string } | undefined)
+            u = await fetchProfile(session.user.id)
+          }
+          if (u && session.user.email) u.email = session.user.email
           setUser(u ?? null)
         } else {
           if (typeof window !== "undefined") clearAuthCookie()
@@ -203,7 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true
       subscription.unsubscribe()
     }
-  }, [fetchProfile, ensureProfile, supabaseReady])
+  }, [fetchProfile, fetchProfileFromDb, ensureProfile, supabaseReady])
 
   // 로그인 안 된 상태면 로그인 화면으로. session 판별 완료 후에만 redirect.
   // 홈(/)에서는 절대 redirect 하지 않음 → Chat/다른 링크 클릭이 가드에 막히지 않음. /chat·/me 등은 각 페이지에서 /auth?next=... 처리.
@@ -281,6 +315,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       isDemo,
       signInAsAdmin,
+      canAccessAdmin: canAccessAdmin(user),
       getAccessToken,
       refreshProfile,
       ...(getSupabase() ? {} : DEV_BYPASS_AUTH ? { signInDemo } : {}),

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase-server"
+import { getRequestUser, isAdminUserId } from "@/lib/api-auth"
 import { mapRowToPost, appTypeToDb } from "@/lib/posts-api"
 import type { Post } from "@/lib/mock-data"
 import type { PostsFeedRow } from "@/lib/posts-api"
@@ -97,11 +98,33 @@ export async function PATCH(request: Request, { params }: Params) {
   return NextResponse.json(mapRowToPost(feedRow as PostsFeedRow))
 }
 
-export async function DELETE(_request: Request, { params }: Params) {
+export async function DELETE(request: Request, { params }: Params) {
   if (!supabaseAdmin) {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 })
   }
   const { id } = await params
+  const auth = await getRequestUser(request)
+  if ("error" in auth) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+  const { data: postRow } = await supabaseAdmin
+    .from("posts")
+    .select("author_id")
+    .eq("id", id)
+    .single()
+  if (!postRow) {
+    return NextResponse.json({ error: "Post not found" }, { status: 404 })
+  }
+  const authorId = postRow.author_id as string
+  const canDelete =
+    auth.userId === authorId || isAdminUserId(auth.userId, auth.email)
+  if (!canDelete) {
+    return NextResponse.json(
+      { error: "Only the author or an admin can delete this post" },
+      { status: 403 }
+    )
+  }
+  await supabaseAdmin.from("post_media").delete().eq("post_id", id)
   const { error } = await supabaseAdmin.from("posts").delete().eq("id", id)
   if (error) {
     console.error("posts DELETE", error)

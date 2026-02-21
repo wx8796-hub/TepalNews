@@ -4,9 +4,11 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { PenSquare, MessageCircle, User, Shield } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useAuth } from "@/lib/auth-context"
 
 export function AppBar() {
   const pathname = usePathname()
+  const { canAccessAdmin } = useAuth()
 
   if (pathname === "/auth") return null
 
@@ -42,11 +44,13 @@ export function AppBar() {
               <span>Profile</span>
             </Link>
           </Button>
-          <Button variant={pathname === "/admin" ? "secondary" : "ghost"} size="sm" asChild>
-            <Link href="/admin">
-              <Shield className="size-4" />
-            </Link>
-          </Button>
+          {canAccessAdmin && (
+            <Button variant={pathname === "/admin" ? "secondary" : "ghost"} size="sm" asChild>
+              <Link href="/admin">
+                <Shield className="size-4" />
+              </Link>
+            </Button>
+          )}
         </nav>
       </div>
     </header>

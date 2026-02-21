@@ -95,6 +95,8 @@ export function PostCard({ post }: { post: Post }) {
                 <img
                   src={post.media[0]}
                   alt=""
+                  loading="lazy"
+                  decoding="async"
                   className="max-h-full max-w-full object-contain object-center"
                 />
               </div>
