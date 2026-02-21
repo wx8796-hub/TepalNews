@@ -7,6 +7,7 @@ import {
   useCallback,
   useMemo,
   useEffect,
+  useRef,
   type ReactNode,
 } from "react"
 import type { Post } from "@/lib/mock-data"
@@ -54,9 +55,12 @@ export function PostsProvider({ children }: { children: ReactNode }) {
   const [manualHotTopicId, setManualHotTopicId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const postsLengthRef = useRef(0)
+  postsLengthRef.current = posts.length
 
   const refetch = useCallback(async (token?: string | null) => {
-    setLoading(true)
+    const isInitialLoad = postsLengthRef.current === 0
+    if (isInitialLoad) setLoading(true)
     setError(null)
     try {
       const headers: HeadersInit = {}

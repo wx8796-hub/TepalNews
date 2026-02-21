@@ -122,7 +122,6 @@ const handleLogin = async () => {
         toast.error(userMsg)
         return
       }
-      toast.success("Signed in!")
       setAuthCookie(data.session.access_token)
       const destination = safeNext || "/"
       router.replace(destination)
@@ -286,13 +285,16 @@ const handleLogin = async () => {
     }
   }
 
+  useEffect(() => {
+    if (user && getSupabase() && safeNext !== undefined) {
+      router.replace(safeNext || "/")
+    }
+  }, [user, safeNext, router])
+
   if (user && getSupabase()) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="rounded-2xl border border-border bg-card p-8 shadow-lg text-center max-w-sm">
-          <p className="text-sm text-muted-foreground mb-4">You&apos;re already signed in as {user.name}.</p>
-          <Button onClick={() => router.replace(safeNext || "/")}>Go to app</Button>
-        </div>
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
       </div>
     )
   }

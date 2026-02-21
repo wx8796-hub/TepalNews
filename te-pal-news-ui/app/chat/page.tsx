@@ -32,15 +32,18 @@ type MessageWithProfile = MessageRow & {
 
 const PRESENCE_CHANNEL = "presence:global-chat"
 
+// Session cache: show last-loaded chat immediately when navigating back to /chat
+let cachedGlobalId: string | null = null
+let cachedMessages: MessageWithProfile[] = []
+
 export default function GlobalChatPage() {
   const router = useRouter()
   const { user: appUser } = useAuth()
-  const [globalId, setGlobalId] = useState<string | null>(null)
-  console.log("[CHAT_PAGE] rendered")
-  const [messages, setMessages] = useState<MessageWithProfile[]>([])
+  const [globalId, setGlobalId] = useState<string | null>(cachedGlobalId)
+  const [messages, setMessages] = useState<MessageWithProfile[]>(cachedMessages)
   const [input, setInput] = useState("")
   const [sending, setSending] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(cachedGlobalId ? false : true)
   const [error, setError] = useState<string | null>(null)
   const [onlineUserIds, setOnlineUserIds] = useState<string[]>([])
   const [profilesCache, setProfilesCache] = useState<Record<string, ProfileRow>>({})
@@ -211,6 +214,8 @@ export default function GlobalChatPage() {
         setMessages(withProfile)
         chatLoadedRef.current = true
         setLoading(false)
+        cachedGlobalId = cid
+        cachedMessages = withProfile
 
         channelRealtime = supabase
           .channel(`messages:${cid}`)
@@ -228,7 +233,9 @@ export default function GlobalChatPage() {
               }
               setMessages((prev) => {
                 if (prev.some((m) => m.id === withProfile.id)) return prev
-                return [...prev, withProfile]
+                const next = [...prev, withProfile]
+                if (cid === cachedGlobalId) cachedMessages = next
+                return next
               })
             }
           )
