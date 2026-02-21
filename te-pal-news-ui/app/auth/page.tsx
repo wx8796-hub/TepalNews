@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { Suspense, useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -26,7 +26,7 @@ const DEV_BYPASS_AUTH =
   process.env.NODE_ENV === "development" &&
   process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true"
 
-export default function AuthPage() {
+function AuthPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const nextUrl = searchParams.get("next") ?? ""
@@ -523,5 +523,19 @@ const handleLogin = async () => {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      }
+    >
+      <AuthPageContent />
+    </Suspense>
   )
 }
