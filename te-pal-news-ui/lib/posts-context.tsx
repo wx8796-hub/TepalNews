@@ -110,6 +110,20 @@ export function PostsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    const onInitial = (ev: CustomEvent<Post[]>) => {
+      const list = ev.detail
+      if (Array.isArray(list) && list.length > 0) {
+        setPosts(list)
+        postIdsRef.current = list.map((p) => p.id)
+        setLoading(false)
+        setError(null)
+      }
+    }
+    window.addEventListener("initial-posts", onInitial as EventListener)
+    return () => window.removeEventListener("initial-posts", onInitial as EventListener)
+  }, [])
+
+  useEffect(() => {
     saveManualHotTopic(manualHotTopicId)
   }, [manualHotTopicId])
 
