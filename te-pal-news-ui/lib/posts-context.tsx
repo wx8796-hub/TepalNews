@@ -56,25 +56,38 @@ export function PostsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const postsLengthRef = useRef(0)
+  const postIdsRef = useRef<string[]>([])
   postsLengthRef.current = posts.length
+  postIdsRef.current = posts.map((p) => p.id)
 
   const refetch = useCallback(async (token?: string | null) => {
-    const isInitialLoad = postsLengthRef.current === 0
-    if (isInitialLoad) setLoading(true)
+    const hasPosts = postsLengthRef.current > 0
+    if (!hasPosts) setLoading(true)
     setError(null)
     try {
-      const headers: HeadersInit = {}
-      if (token) headers.Authorization = `Bearer ${token}`
-      const res = await fetch("/api/posts", { headers })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `Failed to load posts (${res.status})`)
+      if (!hasPosts) {
+        const res = await fetch("/api/public-posts")
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error((data as { error?: string }).error || `Failed to load posts (${res.status})`)
+        }
+        const data = (await res.json()) as Post[]
+        setPosts(Array.isArray(data) ? data : [])
+        postIdsRef.current = (Array.isArray(data) ? data : []).map((p) => p.id)
       }
-      const data = await res.json()
-      setPosts(Array.isArray(data) ? data : [])
+      if (token && postIdsRef.current.length > 0) {
+        const likesRes = await fetch(
+          `/api/me/likes?postIds=${encodeURIComponent(postIdsRef.current.join(","))}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        if (likesRes.ok) {
+          const liked = (await likesRes.json()) as Record<string, boolean>
+          setPosts((prev) => prev.map((p) => ({ ...p, liked: !!liked[p.id] })))
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load posts")
-      setPosts([])
+      if (!hasPosts) setPosts([])
     } finally {
       setLoading(false)
     }
@@ -82,8 +95,7 @@ export function PostsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setManualHotTopicId(loadManualHotTopic())
-    refetch()
-  }, [refetch])
+  }, [])
 
   useEffect(() => {
     saveManualHotTopic(manualHotTopicId)

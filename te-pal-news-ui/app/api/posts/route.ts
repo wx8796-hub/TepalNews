@@ -15,51 +15,6 @@ function perfLog(route: string, step: string, ms: number, extra?: Record<string,
   console.log(JSON.stringify({ tag: "perf", route, step, ms, ...extra }))
 }
 
-type PostRow = {
-  id: string
-  author_id: string
-  type: string
-  title: string | null
-  content: string
-  link_url: string | null
-  tags: string[] | null
-  is_hidden: boolean
-  created_at: string
-  updated_at?: string
-}
-type ProfileRow = { user_id: string; display_name: string | null; avatar_url: string | null; bio: string | null }
-
-function buildFeedRows(
-  postRows: PostRow[],
-  profileByAuthor: Record<string, ProfileRow>,
-  likeCountByPost: Record<string, number>,
-  commentCountByPost: Record<string, number>,
-  mediaByPost: Record<string, string[]>
-): PostsFeedRow[] {
-  return postRows.map((p) => {
-    const pr = profileByAuthor[p.author_id]
-    const type = (p.type === "english_tip" ? "english-tip" : p.type) as "photo" | "update" | "english-tip"
-    return {
-      id: p.id,
-      author_id: p.author_id,
-      type,
-      title: p.title,
-      content: p.content,
-      link_url: p.link_url,
-      tags: p.tags,
-      is_hidden: p.is_hidden,
-      created_at: p.created_at,
-      updated_at: p.updated_at,
-      display_name: pr?.display_name ?? null,
-      avatar_url: pr?.avatar_url ?? null,
-      bio: pr?.bio ?? null,
-      like_count: likeCountByPost[p.id] ?? 0,
-      comment_count: commentCountByPost[p.id] ?? 0,
-      media: mediaByPost[p.id]?.length ? mediaByPost[p.id] : null,
-    }
-  })
-}
-
 export async function GET(request: Request) {
   const t0 = Date.now()
   if (!supabaseAdmin) {
@@ -71,67 +26,28 @@ export async function GET(request: Request) {
 
   const authPromise = getRequestUser(request).catch(() => ({ error: "none", status: 0 } as const))
 
-  const tPosts0 = Date.now()
-  const { data: postRows, error: postsErr } = await supabaseAdmin
-    .from("posts")
-    .select("id, author_id, type, title, content, link_url, tags, is_hidden, created_at, updated_at")
-    .eq("is_hidden", false)
-    .order("created_at", { ascending: false })
-    .limit(FEED_LIMIT)
-  const tPosts1 = Date.now()
-  perfLog("/api/posts", "posts_query", tPosts1 - tPosts0)
-
-  if (postsErr) {
-    console.error("posts GET", postsErr)
-    return NextResponse.json({ error: postsErr.message }, { status: 500 })
-  }
-  const postsList = (postRows ?? []) as PostRow[]
-  if (postsList.length === 0) {
-    perfLog("/api/posts", "total", Date.now() - t0, { posts: 0 })
-    return NextResponse.json([], {
-      headers: { "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30" },
-    })
-  }
-
-  const authorIds = [...new Set(postsList.map((p) => p.author_id))]
-  const postIds = postsList.map((p) => p.id)
-
-  const tAgg0 = Date.now()
-  const [profilesRes, likesRes, commentsRes, mediaRes] = await Promise.all([
-    supabaseAdmin.from("profiles").select("user_id, display_name, avatar_url, bio").in("user_id", authorIds),
-    supabaseAdmin.from("post_likes").select("post_id").in("post_id", postIds),
-    supabaseAdmin.from("comments").select("post_id").eq("is_hidden", false).in("post_id", postIds),
-    supabaseAdmin.from("post_media").select("post_id, storage_path, sort_order").in("post_id", postIds).order("sort_order"),
-  ])
-  const tAgg1 = Date.now()
-  perfLog("/api/posts", "profiles_likes_comments_media", tAgg1 - tAgg0)
-
-  const profileByAuthor: Record<string, ProfileRow> = {}
-  ;(profilesRes.data ?? []).forEach((r) => {
-    profileByAuthor[(r as ProfileRow).user_id] = r as ProfileRow
-  })
-  const likeCountByPost: Record<string, number> = {}
-  ;(likesRes.data ?? []).forEach((r: { post_id: string }) => {
-    likeCountByPost[r.post_id] = (likeCountByPost[r.post_id] ?? 0) + 1
-  })
-  const commentCountByPost: Record<string, number> = {}
-  ;(commentsRes.data ?? []).forEach((r: { post_id: string }) => {
-    commentCountByPost[r.post_id] = (commentCountByPost[r.post_id] ?? 0) + 1
-  })
-  const mediaByPost: Record<string, string[]> = {}
-  ;(mediaRes.data ?? []).forEach((r: { post_id: string; storage_path: string }) => {
-    if (!mediaByPost[r.post_id]) mediaByPost[r.post_id] = []
-    mediaByPost[r.post_id].push(r.storage_path)
-  })
-
-  const rows = buildFeedRows(postsList, profileByAuthor, likeCountByPost, commentCountByPost, mediaByPost)
+  const t1 = Date.now()
+  const { data: rows, error: rpcErr } = await supabaseAdmin.rpc("get_feed", { limit_n: FEED_LIMIT })
   const t2 = Date.now()
-  perfLog("/api/posts", "mapping", t2 - tAgg1, { rows: rows.length })
+  perfLog("/api/posts", "get_feed_rpc", t2 - t1)
 
-  const posts: Post[] = rows.map((row) => mapRowToPost(row))
+  if (rpcErr) {
+    console.error("posts GET get_feed", rpcErr)
+    if (rpcErr.code === "42883" || rpcErr.message?.includes("function") || rpcErr.message?.includes("does not exist")) {
+      return NextResponse.json(
+        { error: "Run supabase-get-feed-rpc.sql in Supabase SQL Editor to create get_feed(limit_n)." },
+        { status: 502 }
+      )
+    }
+    return NextResponse.json({ error: rpcErr.message }, { status: 500 })
+  }
+
+  const feedRows = (Array.isArray(rows) ? rows : []) as PostsFeedRow[]
+  const posts: Post[] = feedRows.map((row) => mapRowToPost(row))
 
   const authResult = await authPromise
   if ("userId" in authResult && authResult.userId && posts.length > 0) {
+    const postIds = posts.map((p) => p.id)
     const tLikes0 = Date.now()
     const { data: userLikeRows } = await supabaseAdmin
       .from("post_likes")

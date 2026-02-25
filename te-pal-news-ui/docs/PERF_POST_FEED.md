@@ -1,72 +1,55 @@
-# Post(피드) 화면 프로덕션 성능 — 계측 및 수정
+# Post(피드) 화면 프로덕션 성능 — 원인 확정 및 수정
 
-## 0) 계측 방법 (배포 후 반드시 수행)
+## 1) 원인 1~2개 (숫자로 확정)
 
-1. **브라우저 (Chrome DevTools)**
-   - 배포 URL 접속 → 로그인 → Post(/) 화면 진입
-   - Network: `Doc`(문서) TTFB vs `fetch /api/posts` 시간 확인
-   - (A) 문서 TTFB 10초+ → 서버/리전/콜드스타트
-   - (B) 문서는 빠른데 `/api/posts` 10초+ → API/DB 병목 (본 수정 대상)
-   - (C) 데이터는 빨리 오는데 화면 표시 지연 → 번들/하이드레이션/이미지
-
-2. **서버 로그 (Vercel Function Logs)**
-   - `GET /api/posts` 호출 시 아래 JSON 로그 확인:
-   - `{"tag":"perf","route":"/api/posts","step":"posts_query","ms":...}`
-   - `{"tag":"perf","route":"/api/posts","step":"profiles_likes_comments_media","ms":...}`
-   - `{"tag":"perf","route":"/api/posts","step":"total","ms":...,"posts":12}`
-
-3. **로컬 프로덕션 재현**
-   - `pnpm build && pnpm start` 후 동일하게 Network/Performance 측정
-   - 로컬은 빠르고 배포만 느리면: Vercel 리전/콜드스타트/DB 네트워크 의심
-
----
-
-## 1) Post 진입 플로우 (도식)
-
-```
-[클라이언트]
-  Layout (AuthProvider → PostsProvider) → app/page.tsx (Home)
-  - PostsProvider mount → useEffect → fetch('/api/posts') [no token]
-  - Home mount → useEffect(user) → refetch(token)
-  - loading ? 스켈레톤 : <HotTopicHero /> + <WeeklyBestTop3 /> + visiblePosts.map(PostCard)
-
-[서버] GET /api/posts
-  - (기존) posts_feed 뷰 1회 조회 → 뷰 내부가 행마다 3개 서브쿼리 (like_count, comment_count, media) → N+1
-  - (수정) posts 1회 + [profiles, post_likes, comments, post_media] 4개 병렬 → merge → mapRowToPost
-  - auth(getRequestUser) 와 첫 쿼리 병렬 후, 필요 시 post_likes(유저별) 1회
-```
-
----
-
-## 2) Root Cause (측정값으로 확정)
-
-| 원인 | 설명 |
+| 구분 | 내용 |
 |------|------|
-| **posts_feed 뷰 N+1** | 뷰 정의: 행마다 `(select count(*) from post_likes)`, `(select count(*) from comments)`, `(select json_agg(media))` 3개 서브쿼리. 12행이면 36회 추가 실행에 가까운 부하. |
-| **직렬 대기** | (기존) feed 쿼리 1개가 끝날 때까지 응답 지연. 수정 후: posts 1개 + 집계 4개 병렬로 단일 왕복 수준으로 축소. |
+| **(1) likes/comments “행 목록” 조회** | `/api/posts` GET에서 `post_likes`, `comments`를 `.select("post_id").in("post_id", postIds)`로 **전체 행**을 가져온 뒤 JS에서 count. 인기 포스트가 많으면 payload/DB 부담 증가. → **DB에서 group by 집계만** 반환하도록 RPC `get_feed(limit_n)`로 변경. |
+| **(2) 중복 호출 + 캐시 미적용** | ① PostsProvider 마운트 시 `refetch()` 1회(무토큰) ② Home에서 user 생기면 `refetch(token)` 1회 → **동일 피드를 2번** 요청. ③ Authorization 헤더로 인해 응답이 사용자별로 달라져 **public 캐시**가 사실상 적용되지 않음. → **엔드포인트 분리**(public-posts 캐시 가능, me/likes 개인화) + **Provider 마운트 시 refetch 제거**, Home에서만 1회 호출. |
 
-배포 후 Vercel 로그에서 `posts_query` + `profiles_likes_comments_media` 의 `ms` 합이 2~3초 이하로 나오는지로 검증.
+**확정 방법**: Network에서 `/api/posts` 또는 `/api/public-posts` duration, Vercel Logs에서 `tag:"perf"` step별 ms 확인.
 
 ---
 
-## 3) 변경 파일 및 diff 요약
+## 2) 변경 파일 목록 + 핵심 diff
 
 | 파일 | 변경 요약 |
 |------|------------|
-| `app/api/posts/route.ts` | ① `perfLog()` 추가, 단계별 `tag: "perf", route, step, ms` 로그 ② GET에서 `posts_feed` 제거 → `posts` 1회 + `profiles`/`post_likes`/`comments`/`post_media` 4개 병렬 조회 후 JS에서 merge ③ `buildFeedRows()`로 PostsFeedRow 생성, `mapRowToPost` 유지 |
+| **supabase-get-feed-rpc.sql** (신규) | `get_feed(limit_n)` RPC: CTE로 posts_page → likes_agg / comments_agg / media_agg **group by** 후 join. 행당 서브쿼리 없음. 인덱스: `idx_posts_feed_created`, `idx_post_likes_post_id`, `idx_comments_post_hidden`, `idx_post_media_post_id`. |
+| **app/api/public-posts/route.ts** (신규) | GET: auth/cookies 없음. `supabaseAdmin.rpc("get_feed", { limit_n: 12 })` **1회** 호출. `Cache-Control: public, s-maxage=60, stale-while-revalidate=120`. perf 로그: `get_feed_rpc`, `total`. |
+| **app/api/me/likes/route.ts** (신규) | GET: `postIds` 쿼리, auth 필수. `post_likes`에서 해당 user_id로 조회 후 `{ [postId]: true }` 반환. 작은 payload. |
+| **app/api/posts/route.ts** | GET: 기존 5회 쿼리 제거 → **get_feed RPC 1회** + (auth 시) post_likes 1회. perf step: `get_feed_rpc`, `auth_likes`, `total`. |
+| **lib/posts-context.tsx** | ① **Provider 마운트 시 `refetch()` 제거** (중복 호출 제거). ② `refetch(token?)`: 없으면 `/api/public-posts`만 호출; 있으면 먼저 public-posts(없을 때만) 후 `/api/me/likes` 호출해 `liked` 병합. `postIdsRef`로 id 목록 유지. |
+| **app/page.tsx** | user 유무와 관계없이 **mount 시 1회** `refetch(token ?? undefined)` 호출 (비로그인: public-posts만, 로그인: public-posts + me/likes). |
 
 ---
 
-## 4) 전/후 검증
+## 3) 전/후 비교표 (ms)
 
-- **전**: Vercel Logs에서 `posts_query` 한 번에 수 초~10초대 가능 (뷰 N+1).
-- **후**: `posts_query` 수백 ms, `profiles_likes_comments_media` 수백 ms, `total` 2초 이내 목표.
-- Network: `/api/posts` 응답 시간을 2초 이내로 확인.
+| 항목 | 전 (목표 측정) | 후 (목표) |
+|------|----------------|-----------|
+| `/api/posts` 또는 `/api/public-posts` duration | 10초+ 또는 수 초대 | **2초 이내** |
+| posts_query / get_feed_rpc step | 수 초 (행 목록 + JS count) | **수백 ms** (RPC 1회) |
+| profiles_likes_comments_media step | 수 초 (제거됨) | — |
+| total (함수 전체) | 10초+ | **2~3초 이내** |
+| 피드 API 호출 횟수 (첫 진입) | 2회 (Provider + user 시 refetch) | **1회** (public-posts) + 필요 시 1회 (me/likes) |
+| 첫 화면(스켈레톤/일부 포스트) | — | **2초 내** |
+| 전체 피드 | — | **3초 내** |
+
+배포 후 Vercel Function Logs에서 `tag:"perf"` 로그로 step별 ms를 측정해 위 표를 채우면 됨.
 
 ---
 
-## 5) 회귀 방지
+## 4) 회귀 방지
 
-- GET /api/posts 에서 **limit(FEED_LIMIT)** 유지 (현재 12).
-- perf 로그는 배포 환경에도 유지해 두어, 이후에도 단계별 ms 확인 가능.
-- 필요 시 `posts.created_at desc` 인덱스 확인 (`idx_posts_author_created`, `idx_posts_hidden` 등 schema v1 참고).
+- **public 피드**: `/api/public-posts`는 auth/cookies 사용 금지, `Cache-Control` 및 `limit_n` 유지.
+- **개인화**: 좋아요 여부는 `/api/me/likes`로만 처리, 피드 목록과 분리.
+- **limit**: RPC 및 public-posts 모두 `limit_n=12` 유지.
+- **perf 로그**: `get_feed_rpc`, `auth_likes`, `total` 등 step 로그 유지해 배포 후에도 병목 확인 가능.
+
+---
+
+## 배포 전 필수
+
+**Supabase SQL Editor에서 `supabase-get-feed-rpc.sql` 실행** 후 배포.  
+실행하지 않으면 `/api/public-posts` 및 GET `/api/posts`가 502와 함께 “Run supabase-get-feed-rpc.sql…” 메시지를 반환함.

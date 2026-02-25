@@ -63,8 +63,10 @@ export default function HomePage() {
   const hasMore = visiblePosts.length < filteredPosts.length
 
   useEffect(() => {
-    if (!user) return
-    getAccessToken().then((token) => refetch(token ?? undefined))
+    ;(async () => {
+      const token = user ? await getAccessToken() : null
+      refetch(token ?? undefined)
+    })()
   }, [user?.id, getAccessToken, refetch])
 
   return (
