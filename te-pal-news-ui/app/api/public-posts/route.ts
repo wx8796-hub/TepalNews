@@ -5,6 +5,8 @@ import type { Post } from "@/lib/mock-data"
 import type { PostsFeedRow } from "@/lib/posts-api"
 
 export const dynamic = "force-dynamic"
+/** Edge = fast cold start; avoids ~10s Node serverless wait. */
+export const runtime = "edge"
 
 const FEED_LIMIT = 12
 const CONTENT_PREVIEW_LEN = 140

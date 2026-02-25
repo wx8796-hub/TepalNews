@@ -1,14 +1,6 @@
-import { Suspense } from "react"
-import { FeedSkeleton } from "@/components/feed-skeleton"
-import FeedWithInitial from "./FeedWithInitial"
+import HomePageClient from "./HomePageClient"
 
-export const revalidate = 300
-
-/** Stream shell immediately; feed loads in background and streams when ready (no 14s blank). */
+/** No server-side Supabase: instant TTFB. Feed loads from Edge API (/api/public-posts). */
 export default function HomePage() {
-  return (
-    <Suspense fallback={<FeedSkeleton />}>
-      <FeedWithInitial />
-    </Suspense>
-  )
+  return <HomePageClient />
 }
