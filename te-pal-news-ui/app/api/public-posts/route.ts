@@ -7,12 +7,20 @@ import type { PostsFeedRow } from "@/lib/posts-api"
 export const dynamic = "force-dynamic"
 
 const FEED_LIMIT = 12
+const CONTENT_PREVIEW_LEN = 140
 
 function perfLog(route: string, step: string, ms: number, extra?: Record<string, number | string>) {
   console.log(JSON.stringify({ tag: "perf", route, step, ms, ...extra }))
 }
 
-/** Public feed: no auth, cacheable. Uses get_feed(limit_n) RPC — run supabase-get-feed-rpc.sql first. */
+/** List payload: truncate content, first media only. No cookies/headers — cacheable. */
+function toListPost(p: Post): Post {
+  const content = p.content.length > CONTENT_PREVIEW_LEN ? p.content.slice(0, CONTENT_PREVIEW_LEN) : p.content
+  const media = p.media?.length ? [p.media[0]] : undefined
+  return { ...p, content, media }
+}
+
+/** Public feed: no auth, no cookies(), cacheable. Uses get_feed(limit_n) RPC. */
 export async function GET() {
   const t0 = Date.now()
   if (!supabaseAdmin) {
@@ -24,8 +32,8 @@ export async function GET() {
 
   const t1 = Date.now()
   const { data: rows, error } = await supabaseAdmin.rpc("get_feed", { limit_n: FEED_LIMIT })
-  const t2 = Date.now()
-  perfLog("/api/public-posts", "get_feed_rpc", t2 - t1)
+  const tRpc = Date.now() - t1
+  perfLog("/api/public-posts", "get_feed_rpc", tRpc)
 
   if (error) {
     console.error("public-posts get_feed", error)
@@ -38,13 +46,18 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  const tMap0 = Date.now()
   const feedRows = (Array.isArray(rows) ? rows : []) as PostsFeedRow[]
-  const posts: Post[] = feedRows.map((row) => mapRowToPost(row))
-  perfLog("/api/public-posts", "total", Date.now() - t0, { posts: posts.length })
+  const posts: Post[] = feedRows.map((row) => toListPost(mapRowToPost(row)))
+  const tMap = Date.now() - tMap0
+  const tTotal = Date.now() - t0
+  perfLog("/api/public-posts", "total", tTotal, { posts: posts.length })
 
   return NextResponse.json(posts, {
     headers: {
-      "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120",
+      "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+      "Vary": "Accept-Encoding",
+      "Server-Timing": `rpc;dur=${tRpc}, map;dur=${tMap}, total;dur=${tTotal}`,
     },
   })
 }

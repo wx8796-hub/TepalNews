@@ -138,8 +138,8 @@ export default function HomePage() {
       <div className="space-y-3">
         {filteredPosts.length > 0 ? (
           <>
-            {visiblePosts.map((post) => (
-              <PostCard key={post.id} post={post} />
+            {visiblePosts.map((post, i) => (
+              <PostCard key={post.id} post={post} priorityImage={i === 0} />
             ))}
             {hasMore && (
               <div className="py-4 text-center">

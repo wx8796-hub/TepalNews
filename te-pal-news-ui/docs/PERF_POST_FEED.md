@@ -53,3 +53,36 @@
 
 **Supabase SQL Editor에서 `supabase-get-feed-rpc.sql` 실행** 후 배포.  
 실행하지 않으면 `/api/public-posts` 및 GET `/api/posts`가 502와 함께 “Run supabase-get-feed-rpc.sql…” 메시지를 반환함.
+
+---
+
+## 2차: 캐시·페이로드·LCP (여전히 느릴 때)
+
+### 원인 확정 (숫자)
+
+- **x-vercel-cache**: 응답 헤더에서 `HIT`/`MISS` 확인. `MISS`가 많으면 캐시 미적용(Set-Cookie/Vary/Cookie 사용 여부 점검).
+- **Server-Timing**: `/api/public-posts`에 `rpc;dur=…, map;dur=…, total;dur=…` 추가 → Network 탭에서 단계별 ms 확인.
+- **LCP**: Performance 탭에서 LCP 리소스가 이미지인지 텍스트인지 확인. 이미지면 above-the-fold 1장만 priority.
+
+### 적용한 수정
+
+| 파일 | 변경 |
+|------|------|
+| **app/api/public-posts/route.ts** | ① **Server-Timing** 헤더 추가 (`rpc`, `map`, `total` ms). ② **Cache-Control**: `s-maxage=300, stale-while-revalidate=600`. ③ **Vary**: `Accept-Encoding`만 명시. ④ **목록 페이로드 축소**: `toListPost()`로 content 140자 truncate, media는 첫 1개만 반환. (cookies/headers 미호출 유지.) |
+| **components/post-card.tsx** | ① **priorityImage** prop: 첫 카드만 `loading="eager"`, `fetchPriority="high"`. ② **sizes**: `(max-width: 768px) 100vw, 672px`. ③ **React.memo(PostCardInner)** 로 불필요 리렌더 감소. |
+| **app/page.tsx** | 첫 번째 `PostCard`에 `priorityImage={true}` 전달. |
+
+### 전후 비교 (배포 후 채울 것)
+
+| 항목 | 전 | 후 |
+|------|-----|-----|
+| x-vercel-cache | MISS 다수 | **HIT** 확인, age 누적 |
+| Server-Timing total (ms) | — | Network에서 확인 |
+| content-length | — | 140자+첫 미디어 1개로 감소 |
+| Lighthouse FCP/LCP/TBT | — | 모바일 기준 측정 |
+
+### 회귀 방지
+
+- 목록 응답은 **최소 payload**(content truncate, media 1개) 유지.
+- `/api/public-posts`는 **cookies()/headers()/Authorization** 사용 금지.
+- **Server-Timing** 및 perf 로그 유지.

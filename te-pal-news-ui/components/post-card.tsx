@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, memo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Heart, MessageCircle, ExternalLink, Image as ImageIcon } from "lucide-react"
@@ -12,7 +12,7 @@ import { useAuth } from "@/lib/auth-context"
 import { usePosts } from "@/lib/posts-context"
 import type { Post } from "@/lib/mock-data"
 
-export function PostCard({ post }: { post: Post }) {
+function PostCardInner({ post, priorityImage }: { post: Post; priorityImage?: boolean }) {
   const router = useRouter()
   const { user, getAccessToken } = useAuth()
   const { refetch } = usePosts()
@@ -95,9 +95,10 @@ export function PostCard({ post }: { post: Post }) {
                 <img
                   src={post.media[0]}
                   alt=""
-                  loading="lazy"
+                  loading={priorityImage ? "eager" : "lazy"}
                   decoding="async"
-                  fetchPriority="low"
+                  fetchPriority={priorityImage ? "high" : "low"}
+                  sizes="(max-width: 768px) 100vw, 672px"
                   className="max-h-full max-w-full object-contain object-center"
                 />
               </div>
@@ -143,3 +144,6 @@ export function PostCard({ post }: { post: Post }) {
     </Link>
   )
 }
+
+export const PostCard = memo(PostCardInner)
+PostCard.displayName = "PostCard"
