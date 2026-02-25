@@ -29,9 +29,11 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const prefetchScript = `(function(){fetch("/api/public-posts").then(function(r){return r.ok?r.json():[]}).then(function(d){if(Array.isArray(d)&&d.length){window.__PREFETCHED_FEED__=d;window.dispatchEvent(new CustomEvent("prefetched-feed",{detail:d}));}}).catch(function(){});})();`
   return (
     <html lang="en">
       <body className={`${inter.variable} ${spaceGrotesk.variable} font-sans antialiased`}>
+        <script dangerouslySetInnerHTML={{ __html: prefetchScript }} />
         <AuthProvider>
         <PostsProvider>
           <AppBar />

@@ -53,6 +53,7 @@ function saveManualHotTopic(id: string | null) {
 declare global {
   interface Window {
     __INITIAL_POSTS__?: Post[]
+    __PREFETCHED_FEED__?: Post[]
   }
 }
 
@@ -110,17 +111,23 @@ export function PostsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    const onInitial = (ev: CustomEvent<Post[]>) => {
-      const list = ev.detail
-      if (Array.isArray(list) && list.length > 0) {
-        setPosts(list)
-        postIdsRef.current = list.map((p) => p.id)
-        setLoading(false)
-        setError(null)
-      }
+    const applyFeed = (list: Post[]) => {
+      if (!Array.isArray(list) || list.length === 0) return
+      setPosts(list)
+      postIdsRef.current = list.map((p) => p.id)
+      setLoading(false)
+      setError(null)
+      delete window.__PREFETCHED_FEED__
     }
+    const onInitial = (ev: CustomEvent<Post[]>) => applyFeed(ev.detail)
+    const onPrefetched = (ev: CustomEvent<Post[]>) => applyFeed(ev.detail)
+    if (window.__PREFETCHED_FEED__) applyFeed(window.__PREFETCHED_FEED__)
     window.addEventListener("initial-posts", onInitial as EventListener)
-    return () => window.removeEventListener("initial-posts", onInitial as EventListener)
+    window.addEventListener("prefetched-feed", onPrefetched as EventListener)
+    return () => {
+      window.removeEventListener("initial-posts", onInitial as EventListener)
+      window.removeEventListener("prefetched-feed", onPrefetched as EventListener)
+    }
   }, [])
 
   useEffect(() => {
