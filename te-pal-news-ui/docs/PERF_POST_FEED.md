@@ -86,3 +86,27 @@
 - 목록 응답은 **최소 payload**(content truncate, media 1개) 유지.
 - `/api/public-posts`는 **cookies()/headers()/Authorization** 사용 금지.
 - **Server-Timing** 및 perf 로그 유지.
+
+---
+
+## 3차: 첫 피드 서버 렌더 (8초 → 2초 목표)
+
+### 병목 결론 (가정)
+
+- **클라이언트 fetch 지연**: 홈이 전부 "use client"라서, HTML 도착 후 → JS 로드 → hydrate → PostsProvider mount → refetch() → **/api/public-posts 응답 후**에야 카드가 그려짐. API가 1초여도 “첫 카드까지” 5~8초가 나올 수 있음.
+- **Doc TTFB**: 미들웨어 없음. 레이아웃은 서버 컴포넌트이지만 AuthProvider/PostsProvider가 클라이언트라, 문서 자체는 정적일 수 있음. 계측으로 확인.
+
+### 적용한 수정 (1순위: 첫 피드를 서버에서)
+
+| 파일 | 변경 |
+|------|------|
+| **lib/get-public-feed-server.ts** (신규) | 서버 전용. `unstable_cache(getPublicFeedUncached, ["public-feed"], { revalidate: 300 })`. cookies/headers 미사용, `get_feed(12)` RPC + 목록용 truncate. |
+| **app/page.tsx** | **서버 컴포넌트**로 변경. `export const revalidate = 300`. `getPublicFeedServer()` 호출 후, `<script id="initial-posts" type="application/json">` + 인라인 스크립트로 `window.__INITIAL_POSTS__` 설정. `<HomePageClient />` 렌더. |
+| **app/HomePageClient.tsx** (신규) | 기존 홈 UI(client). 스켈레톤은 `loading && !hasPosts`일 때만. `showContent = hasPosts \|\| !loading` → 서버에서 받은 초기 posts가 있으면 즉시 카드 표시. |
+| **lib/posts-context.tsx** | `useState<Post[]>(() => getInitialPostsFromServer())`, `useState(loading)(() => getInitialPostsFromServer().length === 0)`. 서버에서 넣은 `window.__INITIAL_POSTS__`로 첫 페인트에 posts + loading=false. |
+
+### 검증 방법 (프로덕션)
+
+1. **첫 로드**: Network에서 **첫 요청에 /api/public-posts가 없어도** HTML에 피드 카드(텍스트/틀)가 포함되는지 확인. (서버가 직접 RPC 호출하므로 클라이언트는 초기 12개를 API로 다시 안 불러도 됨.)
+2. **첫 카드까지 시간**: Performance 또는 Lighthouse로 “첫 카드(텍스트/틀)가 보이는 시점”이 Doc TTFB + 파싱 직후(2초 내)인지 확인.
+3. **Doc TTFB**: 홈(/) 요청의 문서 TTFB. revalidate=300이면 두 번째 방문부터 캐시 가능.

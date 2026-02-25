@@ -50,10 +50,22 @@ function saveManualHotTopic(id: string | null) {
   }
 }
 
+declare global {
+  interface Window {
+    __INITIAL_POSTS__?: Post[]
+  }
+}
+
+function getInitialPostsFromServer(): Post[] {
+  if (typeof window === "undefined") return []
+  const raw = window.__INITIAL_POSTS__
+  return Array.isArray(raw) ? raw : []
+}
+
 export function PostsProvider({ children }: { children: ReactNode }) {
-  const [posts, setPosts] = useState<Post[]>([])
+  const [posts, setPosts] = useState<Post[]>(() => getInitialPostsFromServer())
   const [manualHotTopicId, setManualHotTopicId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => getInitialPostsFromServer().length === 0)
   const [error, setError] = useState<string | null>(null)
   const postsLengthRef = useRef(0)
   const postIdsRef = useRef<string[]>([])
